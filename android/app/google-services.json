@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "144974667195",
+    "project_id": "cpnails-6ee66",
+    "storage_bucket": "cpnails-6ee66.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:144974667195:android:14a2e40087362990e6b89e",
+        "android_client_info": {
+          "package_name": "com.nails.service"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXkxiccQOJuI9pLwCI-wwOjELPNdTp_SE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

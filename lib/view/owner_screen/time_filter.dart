@@ -1,0 +1,1 @@
+enum TimeFilter { today, thisWeek, thisMonth, custom }
