@@ -77,6 +77,10 @@ dependencies:
   decimal: ^2.0.1
   package_info_plus: ^9.0.0
   crypto: ^3.0.3
+  just_audio: ^0.9.38
+  timezone: ^0.10.0
+  jwt_decoder: ^2.0.1
+  pax_sdk: ^1.0.4
 
 dev_dependencies:
   flutter_test:

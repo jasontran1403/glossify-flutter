@@ -254,7 +254,6 @@ class _PhoneVerificationDialogState extends State<PhoneVerificationDialog> {
 
       if (!mounted) return;
 
-      print(result);
       if (result['exists'] == true) {
         // User exists, return userId and close dialog
         Navigator.of(context).pop({

@@ -1,5 +1,8 @@
+import 'dart:math';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:timezone/timezone.dart' as tz;
 import '../../../api/staff_schedule_model.dart';
 import '../../../utils/constant/staff_slot.dart';
 import '../task_model.dart';
@@ -146,15 +149,20 @@ class BookingGrid extends StatelessWidget {
     final endMinutes = task.endTime.hour * 60 + task.endTime.minute;
     final durationMinutes = endMinutes - startMinutes;
 
-    final now = DateTime.now();
-    final cardDateTime = DateTime(
+    // ⭐ FIXED: Use Chicago timezone for isPastAppointment check
+    final chicago = tz.getLocation('America/Chicago');
+    final nowChicago = tz.TZDateTime.now(chicago);
+
+    // ⭐ Convert card time to Chicago TZDateTime for proper comparison
+    final cardDateTime = tz.TZDateTime(
+      chicago,
       selectedDate.year,
       selectedDate.month,
       selectedDate.day,
       task.startTime.hour,
       task.startTime.minute,
     );
-    final isPastAppointment = cardDateTime.isBefore(now);
+    final isPastAppointment = cardDateTime.isBefore(nowChicago);
 
     double fontScale = 1.0;
     double paddingScale = 1;
@@ -195,15 +203,38 @@ class BookingGrid extends StatelessWidget {
         );
       },
       child: DragTarget<StaffSchedule>(
-        // ... rest of the code stays the same
         onWillAccept: (staff) {
-          if (staff == null) return false;
-          if (isPastAppointment) return false;
-          if (staff.fullName == task.staffName) return false;
+          print('\n🎯 onWillAccept called for Booking ${task.bookingId}:');
+
+          if (staff == null) {
+            print('   ❌ REJECT: staff is null');
+            return false;
+          }
+
+          print('   Staff being dragged: ${staff.fullName} (ID: ${staff.staffId})');
+          print('   Current task staff: ${task.staffName}');
+          print('   Is past appointment: $isPastAppointment');
+
+          if (isPastAppointment) {
+            print('   ❌ REJECT: Past appointment');
+            return false;
+          }
+
+          if (staff.fullName == task.staffName) {
+            print('   ❌ REJECT: Same staff (${staff.fullName})');
+            return false;
+          }
+
+          print('   ✅ ACCEPT: All checks passed');
           return true;
         },
         onAccept: (staff) {
+          print('\n🎉 onAccept called for Booking ${task.bookingId}:');
+          print('   New staff: ${staff.fullName} (ID: ${staff.staffId})');
+          print('   Old staff: ${task.staffName}');
+
           if (isPastAppointment) {
+            print('   ⚠️ Showing past appointment message');
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Row(
@@ -228,6 +259,7 @@ class BookingGrid extends StatelessWidget {
           }
 
           if (staff.fullName == task.staffName) {
+            print('   ⚠️ Showing same staff message');
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Row(
@@ -252,7 +284,10 @@ class BookingGrid extends StatelessWidget {
           }
 
           if (onStaffDropOnCard != null) {
+            print('   ✅ Calling onStaffDropOnCard callback');
             onStaffDropOnCard!(staff, task);
+          } else {
+            print('   ⚠️ onStaffDropOnCard callback is null!');
           }
         },
         builder: (context, candidateData, rejectedData) {
@@ -261,6 +296,14 @@ class BookingGrid extends StatelessWidget {
           final isDraggingSameStaff = staff != null && staff.fullName == task.staffName;
           final isRejected = rejectedData.isNotEmpty ||
               (isDragOver && (isPastAppointment || isDraggingSameStaff));
+
+          if (isDragOver) {
+            print('\n🎨 DragTarget builder - Booking ${task.bookingId}:');
+            print('   isDragOver: true');
+            print('   staff: ${staff?.fullName}');
+            print('   isDraggingSameStaff: $isDraggingSameStaff');
+            print('   isRejected: $isRejected');
+          }
 
           // Determine colors based on state
           Color borderColor;
@@ -372,14 +415,27 @@ class BookingGrid extends StatelessWidget {
                             SizedBox(width: 4 * paddingScale),
 
                             // Priority badges
-                            if (task.isNewlyAdded)
-                              _buildNewBadge(fontScale, paddingScale)
-                            else if (isRejected && isDragOver)
-                              _buildRejectBadge(fontScale, paddingScale, iconScale)
-                            else if (isDragOver && !isRejected && staff != null)
-                                _buildDragBadge(staff, fontScale, paddingScale)
-                              else
-                                _buildStatusBadge(task.status, fontScale, paddingScale),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (task.markUnchange == true) ...[
+                                  _buildStarBadge(fontScale, paddingScale, iconScale),
+                                ],
+
+                                SizedBox(width: 4 * paddingScale),
+                                if (task.isNewlyAdded)
+                                  _buildNewBadge(fontScale, paddingScale)
+                                else if (isRejected && isDragOver)
+                                  _buildRejectBadge(fontScale, paddingScale, iconScale)
+                                else if (isDragOver && !isRejected && staff != null)
+                                    _buildDragBadge(staff, fontScale, paddingScale)
+                                  else
+                                    _buildStatusBadge(task.status, fontScale, paddingScale),
+
+                                // ⭐ Star badge nếu markUnchange = true
+
+                              ],
+                            ),
                           ],
                         ),
 
@@ -644,6 +700,11 @@ class BookingGrid extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
     );
+  }
+
+  // ⭐ Build star icon with wiggle animation (no background)
+  Widget _buildStarBadge(double fontScale, double paddingScale, double iconScale) {
+    return _WiggleStarIcon(iconScale: iconScale);
   }
 
   // Build services by staff (không đổi)
@@ -976,6 +1037,70 @@ class _PulsingGlowState extends State<_PulsingGlow>
                 Colors.transparent,
               ],
               stops: const [0.0, 1.0],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ⭐ Wiggle Star Icon Animation
+class _WiggleStarIcon extends StatefulWidget {
+  final double iconScale;
+
+  const _WiggleStarIcon({required this.iconScale});
+
+  @override
+  State<_WiggleStarIcon> createState() => _WiggleStarIconState();
+}
+
+class _WiggleStarIconState extends State<_WiggleStarIcon>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat(reverse: true); // ⭐ Lắc qua lắc lại
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        // ⭐ Wiggle animation (lắc trái phải)
+        final wiggle = sin(_controller.value * pi * 6) * 0.15; // Lắc mạnh hơn
+
+        // ⭐ Bounce animation (nhảy nhẹ)
+        final bounce = sin(_controller.value * pi * 2) * 2.0;
+
+        return Transform.translate(
+          offset: Offset(0, bounce), // Nhảy lên xuống
+          child: Transform.rotate(
+            angle: wiggle, // Xoay trái phải
+            child: Icon(
+              Icons.star,
+              color: Colors.orange.shade800,
+              size: 30 * widget.iconScale,
+              shadows: [
+                Shadow(
+                  color: Colors.yellow,
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
           ),
         );

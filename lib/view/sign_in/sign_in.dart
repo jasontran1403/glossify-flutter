@@ -239,6 +239,7 @@ class _SignInScreenState extends State<SignInScreen> {
         ),
 
           const SizedBox(height: 20),
+
           Align(
             alignment: Alignment.topRight,
             child: InkWell(
@@ -281,32 +282,6 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
           ),
-
-          const SizedBox(height: 35),
-          // Row(
-          //   children: const [
-          //     Expanded(child: Divider()),
-          //     Padding(
-          //       padding: EdgeInsets.symmetric(horizontal: 8.0),
-          //       child: Text('Or Sign In With'),
-          //     ),
-          //     Expanded(child: Divider()),
-          //   ],
-          // ),
-          //
-          // const SizedBox(height: 35),
-          //
-          // // Social login icons
-          // Row(
-          //   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          //   children: [
-          //     socialIcon(AppImages.apple),
-          //     socialIcon(AppImages.google),
-          //     socialIcon(AppImages.facebook),
-          //   ],
-          // ),
-          //
-          // const SizedBox(height: 35),
 
           Center(
             child: GestureDetector(
@@ -365,7 +340,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     const SizedBox(height: 30),
 
                     // Email
-                    const Text(AppStrings.email),
+                    const Text(AppStrings.emailDemo),
                     TextField(
                       controller: usernamecontroller,
                       focusNode: emailFocus,
@@ -454,51 +429,27 @@ class _SignInScreenState extends State<SignInScreen> {
                     ),
 
                     const SizedBox(height: 35),
-                    // Row(
-                    //   children: const [
-                    //     Expanded(child: Divider()),
-                    //     Padding(
-                    //       padding: EdgeInsets.symmetric(horizontal: 8.0),
-                    //       child: Text('Or Sign In With'),
-                    //     ),
-                    //     Expanded(child: Divider()),
-                    //   ],
-                    // ),
-                    //
-                    // const SizedBox(height: 35),
-                    //
-                    // // Social login icons
-                    // Row(
-                    //   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    //   children: [
-                    //     socialIcon(AppImages.apple),
-                    //     socialIcon(AppImages.google),
-                    //     socialIcon(AppImages.facebook),
-                    //   ],
-                    // ),
-                    //
-                    // const SizedBox(height: 35),
 
-                    // Center(
-                    //   child: GestureDetector(
-                    //     onTap: () {
-                    //       FocusScope.of(context).unfocus();
-                    //       Navigation.push(context, const CreateAccountScreen());
-                    //     },
-                    //     child: RichText(
-                    //       text: const TextSpan(
-                    //         text: 'Don\'t have an Account?',
-                    //         style: TextStyle(color: Colors.black),
-                    //         children: [
-                    //           TextSpan(
-                    //             text: '  Sign Up ',
-                    //             style: TextStyle(color: AppColors.primaryColor),
-                    //           ),
-                    //         ],
-                    //       ),
-                    //     ),
-                    //   ),
-                    // ),
+                    Center(
+                      child: GestureDetector(
+                        onTap: () {
+                          FocusScope.of(context).unfocus();
+                          Navigation.push(context, const CreateAccountScreen());
+                        },
+                        child: RichText(
+                          text: const TextSpan(
+                            text: 'Don\'t have an Account?',
+                            style: TextStyle(color: Colors.black),
+                            children: [
+                              TextSpan(
+                                text: '  Sign Up',
+                                style: TextStyle(color: AppColors.primaryColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 20),
                   ],
                 ),

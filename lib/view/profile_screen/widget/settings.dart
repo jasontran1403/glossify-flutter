@@ -5,6 +5,8 @@ import 'package:hair_sallon/utils/navigation/navigation_file.dart'
     show Navigation;
 import 'package:hair_sallon/widgets/common_appbar/common_appbar.dart';
 
+import 'change_password.dart';
+
 class Settings extends StatefulWidget {
   const Settings({super.key});
 
@@ -45,20 +47,20 @@ class _SettingsState extends State<Settings> {
         children: [
           settingsTile(
             icon: Icons.notifications,
-            title: 'Notification Services',
+            title: 'Notification',
             onTap: () {},
           ),
           settingsTile(
             icon: Icons.key,
-            title: 'Password Manager',
-            onTap: () {},
+            title: 'Change Password',
+            onTap: () {
+              Navigation.push(context, const ChangePasswordScreen());
+            },
           ),
           settingsTile(
-            icon: Icons.delete_forever,
-            title: 'Delete Account',
-            onTap: () {
-              _showDeleteConfirmationDialog(context);
-            },
+            icon: Icons.theater_comedy,
+            title: 'Theme',
+            onTap: () {},
           ),
         ],
       ),

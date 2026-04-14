@@ -172,6 +172,7 @@ class ScheduleState {
 
               final task = Task(
                 bookingId: slot.bookingId, // ← THÊM MỚI: Lấy bookingId từ slot
+                markUnchange: slot.markUnchange,
                 fullName: slot.fullName,
                 customerAvt: slot.customerAvt,
                 staffName: staffName,

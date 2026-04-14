@@ -50,12 +50,60 @@ class ApiResponse<T> {
   bool get isSuccess => code == 900 && status == 'success';
 }
 
-// Thêm helper class để parse page response
 class PageResponseParser {
-  static List<T> parsePageContent<T>(Map<String, dynamic> json, T Function(Map<String, dynamic>) fromJson) {
-    final data = json['data'] as Map<String, dynamic>?;
-    final content = data?['content'] as List?;
+  /// Parse content array from Spring Page response
+  static List<T> parsePageContent<T>(
+      Map<String, dynamic> pageData,
+      T Function(Map<String, dynamic>) fromJson,
+      ) {
+    if (!pageData.containsKey('content')) {
+      return [];
+    }
 
-    return content?.map((item) => fromJson(item as Map<String, dynamic>)).toList() ?? [];
+    final content = pageData['content'];
+    if (content is! List) {
+      return [];
+    }
+
+    final List<T> results = [];
+
+    for (int i = 0; i < content.length; i++) {
+      try {
+        final item = content[i];
+        if (item is! Map<String, dynamic>) {
+          continue;
+        }
+
+        final parsed = fromJson(item);
+        results.add(parsed);
+
+      } catch (e, stackTrace) {
+        print('❌ Error parsing item $i: $e');
+        print('📦 Item data: ${content[i]}');
+        print('📚 Stack trace: $stackTrace');
+      }
+    }
+
+    return results;
+  }
+
+  /// Get total pages from Page response
+  static int getTotalPages(Map<String, dynamic> pageData) {
+    return pageData['totalPages'] ?? 0;
+  }
+
+  /// Get total elements from Page response
+  static int getTotalElements(Map<String, dynamic> pageData) {
+    return pageData['totalElements'] ?? 0;
+  }
+
+  /// Check if current page is the last page
+  static bool isLastPage(Map<String, dynamic> pageData) {
+    return pageData['last'] ?? true;
+  }
+
+  /// Check if current page is the first page
+  static bool isFirstPage(Map<String, dynamic> pageData) {
+    return pageData['first'] ?? true;
   }
 }

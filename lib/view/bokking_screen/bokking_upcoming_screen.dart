@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hair_sallon/api/api_service.dart';
 import 'package:hair_sallon/utils/app_colors/app_colors.dart';
-import 'package:hair_sallon/utils/constant/booking.dart'; // Add this for BookingStatus
+import 'package:hair_sallon/utils/auth_helper.dart';
 import 'package:hair_sallon/view/bokking_screen/pending_booking_card.dart';
 import 'package:hair_sallon/view/bokking_screen/user_booking_models.dart';
-import 'package:hair_sallon/view/bokking_screen/widgets/cancel_booking.dart';
 import 'package:hair_sallon/widgets/common_appbar/common_appbar.dart';
 
+import '../sign_in/sign_in.dart';
 import 'booking_card_shimmer.dart';
 import 'cancelled_booking_card.dart';
 import 'completed_booking_card.dart';
@@ -22,6 +22,7 @@ class BookingScreen extends StatefulWidget {
 class _BookingScreenState extends State<BookingScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool isLoading = true;
+  bool _isLoggedIn = false;
 
   // Store bookings for each tab
   List<UserBookingList> pendingBookings = [];
@@ -48,14 +49,36 @@ class _BookingScreenState extends State<BookingScreen> with SingleTickerProvider
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_handleTabSelection);
 
-    // Load initial data
-    _loadBookings();
+    // ✅ Check login first, then load bookings
+    _checkLoginAndLoadBookings();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  // ✅ UPDATED: Check login status with delay to prevent flickering
+  Future<void> _checkLoginAndLoadBookings() async {
+    // Add delay to prevent flickering and smooth transition
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    final isLoggedIn = await AuthHelper.isLoggedIn();
+
+    if (isLoggedIn) {
+      // User is logged in, keep loading state and fetch bookings
+      setState(() {
+        _isLoggedIn = true;
+      });
+      await _loadBookings();
+    } else {
+      // User not logged in, stop loading and show login UI
+      setState(() {
+        _isLoggedIn = false;
+        isLoading = false;
+      });
+    }
   }
 
   void _handleTabSelection() {
@@ -200,6 +223,92 @@ class _BookingScreenState extends State<BookingScreen> with SingleTickerProvider
     }
   }
 
+  // ✅ Show login required UI
+  Widget _buildLoginRequiredUI() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.primaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.lock_outline,
+                size: 64,
+                color: AppColors.primaryColor,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Login Required',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Please sign in to view your bookings',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: SizedBox(
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    // Navigate to SignInScreen
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SignInScreen()),
+                    );
+
+                    // After returning, check if user logged in
+                    if (mounted) {
+                      final isLoggedIn = await AuthHelper.isLoggedIn();
+                      if (isLoggedIn) {
+                        setState(() {
+                          _isLoggedIn = true;
+                          isLoading = true;
+                        });
+                        _loadBookings();
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Click here to sign in to view your bookings',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTabContent(List<UserBookingList> bookings, String? error, int tabIndex, bool hasNext) {
     Future<void> _onRefresh() async {
       switch (tabIndex) {
@@ -222,7 +331,7 @@ class _BookingScreenState extends State<BookingScreen> with SingleTickerProvider
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             child: SizedBox(
-              height: MediaQuery.of(context).size.height * 0.8, // Ensure height for pull-to-refresh
+              height: MediaQuery.of(context).size.height * 0.8,
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -334,11 +443,14 @@ class _BookingScreenState extends State<BookingScreen> with SingleTickerProvider
         isTitleBold: true,
         iconTheme: const IconThemeData(color: AppColors.whiteColor),
       ),
+      // ✅ Show shimmer while checking login, then show appropriate content
       body: isLoading
           ? ListView.builder(
         itemCount: 3,
         itemBuilder: (context, index) => const BookingCardShimmer(),
       )
+          : !_isLoggedIn
+          ? _buildLoginRequiredUI()
           : TabBarView(
         controller: _tabController,
         children: [

@@ -9,11 +9,16 @@ import 'package:hair_sallon/view/owner_screen/giftcard_screen.dart';
 import 'package:hair_sallon/view/profile_screen/profile_view.dart';
 import 'package:hair_sallon/view/staff_statistic_screen/staff_statistic_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hair_sallon/api/jwt_service.dart';
+import 'package:hair_sallon/main.dart';
 
 import '../dashboard_screen/dashboard_screen.dart';
 import '../owner_screen/management_screen.dart';
+import '../owner_screen/management_screen/day_off_management_screen.dart';
+import '../receptionist_screen/payment_screen.dart';
 import '../receptionist_screen/schedule_manage_screen.dart';
 import '../front_desk_screen/front_desk_welcome_screen.dart';
+import '../staff_screen/day_off_screen.dart';
 
 class BottomNavBarView extends StatefulWidget {
   final int initialTabIndex;
@@ -44,6 +49,7 @@ class _BottomNavBarViewState extends State<BottomNavBarView> {
   int selectedIndex = 0;
   String _userRole = "USER";
   bool _isRoleLoaded = false;
+  bool _isLoggingOut = false;
 
   @override
   void initState() {
@@ -53,22 +59,101 @@ class _BottomNavBarViewState extends State<BottomNavBarView> {
   }
 
   Future<void> _loadUserRole() async {
-    final prefs = await SharedPreferences.getInstance();
-    final role = prefs.getString("role") ?? "USER";
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('accessToken');
 
-    if (mounted) {
-      setState(() {
-        _userRole = role;
-        _isRoleLoaded = true;
-      });
+      if (token != null && token.isNotEmpty) {
+        bool isValid = await JwtService.isTokenValid();
 
-      final newLength = _currentWidgetOptions.length;
-      if (selectedIndex >= newLength) {
+        if (!isValid) {
+          if (mounted) {
+            showTopNotification(
+              "Session Expired",
+              "Please log in again to continue",
+            );
+
+            await Future.delayed(const Duration(seconds: 3));
+            await _handleTokenExpiration();
+          }
+
+          return;
+        }
+
+        final role = prefs.getString("role") ?? "USER";
+
         if (mounted) {
           setState(() {
-            selectedIndex = 0;
+            _userRole = role;
+            _isRoleLoaded = true;
+          });
+
+          final newLength = _currentWidgetOptions.length;
+          if (selectedIndex >= newLength) {
+            if (mounted) {
+              setState(() {
+                selectedIndex = 0;
+              });
+            }
+          }
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _userRole = "USER";
+            _isRoleLoaded = true;
           });
         }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _userRole = "USER";
+          _isRoleLoaded = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleTokenExpiration() async {
+    if (_isLoggingOut) return;
+
+    setState(() {
+      _isLoggingOut = true;
+    });
+
+    bool isOnHomeScreen = selectedIndex == 0;
+
+    if (isOnHomeScreen) {
+      await Future.delayed(const Duration(seconds: 1));
+      await JwtService.clearAuthData();
+
+      if (mounted) {
+        setState(() {
+          _userRole = "USER";
+          _isRoleLoaded = true;
+          selectedIndex = 0;
+          _isLoggingOut = false;
+        });
+      }
+    } else {
+
+      if (mounted) {
+        setState(() {
+          selectedIndex = 0;
+        });
+      }
+
+      await Future.delayed(const Duration(seconds: 1));
+
+      await JwtService.clearAuthData();
+
+      if (mounted) {
+        setState(() {
+          _userRole = "USER";
+          _isRoleLoaded = true;
+          _isLoggingOut = false;
+        });
       }
     }
   }
@@ -81,13 +166,30 @@ class _BottomNavBarViewState extends State<BottomNavBarView> {
     }
   }
 
-  void onMenuTapped(int index) {
-    setState(() {
-      selectedIndex = index;
-    });
+  Future<void> onMenuTapped(int index) async {
+    bool isValid = await JwtService.isTokenValid();
+
+    if (!isValid) {
+      if (mounted) {
+        await showTopNotification(
+          "Session Expired",
+          "Please log in again to continue",
+        );
+
+        await Future.delayed(const Duration(seconds: 3));
+        await _handleTokenExpiration();
+      }
+
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        selectedIndex = index;
+      });
+    }
   }
 
-  // Widget options cho USER
   final List<Widget> _userWidgetOptions = const <Widget>[
     HomeScreenView(),
     ExploreMapScreen(),
@@ -95,67 +197,69 @@ class _BottomNavBarViewState extends State<BottomNavBarView> {
     ProfileScreen(),
   ];
 
-  // Widget options cho STAFF
+  // ✅ UPDATED: Add DayOffScreen for STAFF
   final List<Widget> _staffWidgetOptions = const <Widget>[
     ChatViewScreen(),
     StaffStatisticScreen(),
+    DayOffScreen(), // ✅ NEW: Day-off management
     ProfileScreen(),
   ];
 
-  // Widget options cho OWNER/SUPER_OWNER
   final List<Widget> _ownerWidgetOptions = const <Widget>[
     DashboardScreen(),
     ManagementScreen(),
     CampaignScreen(),
-    // GiftcardScreen(),
+    DayOffManagementScreen(),
     ProfileScreen(),
   ];
 
-  // ⭐ FIXED: Widget options cho RECEPTIONIST - KHÔNG TRUYỀN storeId
   final List<Widget> _receptionistWidgetOptions = const <Widget>[
-    ScheduleManagementScreen(), // ⭐ Bỏ storeId, để screen tự fetch
+    ScheduleManagementScreen(),
+    PaymentScreen(),
     GiftcardScreen(),
     ProfileScreen(),
   ];
 
-  // Widget options cho FRONT_DESK
   final List<Widget> _frontDeskWidgetOptions = const <Widget>[
     FrontDeskWelcomeScreen(),
   ];
 
-  // Bottom nav items cho FRONT_DESK
   final List<BottomNavigationBarItem> _frontDeskNavItems = const [
     BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Welcome'),
   ];
 
-  // Bottom nav items cho RECEPTIONIST
   final List<BottomNavigationBarItem> _receptionistNavItems = const [
-    BottomNavigationBarItem(icon: Icon(Icons.manage_accounts), label: 'Schedule'),
-    BottomNavigationBarItem(icon: Icon(Icons.card_giftcard), label: 'Gift Cards'),
+    BottomNavigationBarItem(
+        icon: Icon(Icons.manage_accounts), label: 'Schedule'),
+    BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Payment'),
+    BottomNavigationBarItem(
+        icon: Icon(Icons.card_giftcard), label: 'Gift Cards'),
     BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
   ];
 
-  // Bottom nav items cho USER
   final List<BottomNavigationBarItem> _userNavItems = const [
     BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
     BottomNavigationBarItem(icon: Icon(Icons.location_on), label: 'Explore'),
-    BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Booking'),
+    BottomNavigationBarItem(
+        icon: Icon(Icons.calendar_month), label: 'Booking'),
     BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
   ];
 
-  // Bottom nav items cho STAFF
+  // ✅ UPDATED: Change icon from calendar to event_busy for Day Off
   final List<BottomNavigationBarItem> _staffNavItems = const [
     BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-    BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Booking'),
+    BottomNavigationBarItem(
+        icon: Icon(Icons.calendar_month), label: 'Booking'),
+    BottomNavigationBarItem(
+        icon: Icon(Icons.event_busy), label: 'Day Off'), // ✅ NEW
     BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
   ];
 
-  // Bottom nav items cho OWNER/SUPER_OWNER
   final List<BottomNavigationBarItem> _ownerNavItems = const [
     BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
     BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Management'),
     BottomNavigationBarItem(icon: Icon(Icons.campaign), label: 'Campaign'),
-    // BottomNavigationBarItem(icon: Icon(Icons.card_giftcard), label: 'Gift card'),
+    BottomNavigationBarItem(icon: Icon(Icons.event_busy), label: 'Day Off'),
     BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
   ];
 
@@ -202,32 +306,65 @@ class _BottomNavBarViewState extends State<BottomNavBarView> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.whiteColor,
-      body: _currentWidgetOptions.elementAt(
-        selectedIndex.clamp(0, _currentWidgetOptions.length - 1),
-      ),
-      bottomNavigationBar: _userRole == "FRONTDESK"
-          ? null
-          : Theme(
-        data: ThemeData(
-          splashColor: AppColors.transparent,
-          highlightColor: AppColors.transparent,
-        ),
-        child: BottomNavigationBar(
-          type: BottomNavigationBarType.fixed,
-          selectedFontSize: 10,
-          unselectedFontSize: 10,
-          iconSize: 20,
+    return Stack(
+      children: [
+        Scaffold(
           backgroundColor: AppColors.whiteColor,
-          currentIndex: selectedIndex.clamp(0, _currentNavItems.length - 1),
-          selectedItemColor: AppColors.primaryColor,
-          unselectedItemColor: AppColors.color_525252,
-          showUnselectedLabels: true,
-          onTap: onMenuTapped,
-          items: _currentNavItems,
+          body: _currentWidgetOptions.elementAt(
+            selectedIndex.clamp(0, _currentWidgetOptions.length - 1),
+          ),
+          bottomNavigationBar: _userRole == "FRONTDESK"
+              ? null
+              : Theme(
+            data: ThemeData(
+              splashColor: AppColors.transparent,
+              highlightColor: AppColors.transparent,
+            ),
+            child: BottomNavigationBar(
+              type: BottomNavigationBarType.fixed,
+              selectedFontSize: 10,
+              unselectedFontSize: 10,
+              iconSize: 20,
+              backgroundColor: AppColors.whiteColor,
+              currentIndex:
+              selectedIndex.clamp(0, _currentNavItems.length - 1),
+              selectedItemColor: AppColors.primaryColor,
+              unselectedItemColor: AppColors.color_525252,
+              showUnselectedLabels: true,
+              onTap: onMenuTapped,
+              items: _currentNavItems,
+            ),
+          ),
         ),
-      ),
+        if (_isLoggingOut)
+          Container(
+            color: Colors.black.withOpacity(0.5),
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Clearing old session...',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

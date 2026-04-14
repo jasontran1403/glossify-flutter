@@ -4,10 +4,14 @@ import 'package:hair_sallon/utils/app_colors/app_colors.dart';
 import 'package:hair_sallon/utils/local_images/local_images.dart';
 import 'package:hair_sallon/utils/navigation/navigation_file.dart';
 import 'package:hair_sallon/view/home_screen/widget/all_top_rated_sallon.dart';
+import 'package:hair_sallon/view/home_screen/widget/audio_manager.dart';
 import 'package:hair_sallon/view/home_screen/widget/salon_special_detail_page.dart';
 import 'package:hair_sallon/view/home_screen/widget/specialofferscreen.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../api/api_response_model.dart';
+import '../../api/gallery_model.dart';
+import '../../api/review_model.dart';
 import '../../utils/constant/staff_simple.dart';
 
 import '../../utils/constant/nail_store_model.dart';
@@ -29,15 +33,15 @@ class _HomeScreenViewState extends State<HomeScreenView> with TickerProviderStat
     AppImages.salon,
   ];
 
+  final AudioManager _audioManager = AudioManager();
+
   final String defaultCategoryImage = AppImages.salon;
 
   // Navigation state
   bool _showSalonList = true;
   NailStoreSimple? _selectedSalon;
 
-  void _showSalonInfoModal() {
-    if (_selectedSalon == null || nailStore == null) return;
-
+  void _showSalonInfoModal({int initialTab = 0}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -45,6 +49,7 @@ class _HomeScreenViewState extends State<HomeScreenView> with TickerProviderStat
       builder: (context) => SalonInfoModal(
         salon: _selectedSalon!,
         storeDetails: nailStore!,
+        initialTabIndex: initialTab,
       ),
     );
   }
@@ -65,6 +70,7 @@ class _HomeScreenViewState extends State<HomeScreenView> with TickerProviderStat
   List<StaffSimple> stylists = [];
   List<StaffSimple> filteredStylists = [];
   bool _isLoadingStylists = true;
+  bool _isMutedTheme = true;
   final TextEditingController _stylistSearchController = TextEditingController();
 
   // Blinking animation for Book Now button
@@ -91,6 +97,13 @@ class _HomeScreenViewState extends State<HomeScreenView> with TickerProviderStat
     _fetchStores();
     _searchController.addListener(_filterStores);
     _stylistSearchController.addListener(_filterStylists);
+
+    if (!_isMutedTheme) _initializeAudio();
+  }
+
+  Future<void> _initializeAudio() async {
+    await _audioManager.initialize();
+    await _audioManager.play();
   }
 
   void _initializeAnimations() {
@@ -150,6 +163,7 @@ class _HomeScreenViewState extends State<HomeScreenView> with TickerProviderStat
     _stylistSearchController.dispose();
     _blinkController.dispose();
     _bellController?.dispose();
+
     super.dispose();
   }
 
@@ -252,9 +266,15 @@ class _HomeScreenViewState extends State<HomeScreenView> with TickerProviderStat
 
     try {
       final staffData = await ApiService.getAllStaff(_selectedSalon!.id);
+
+      // ✅ Bỏ qua user có name là "Anyone"
+      final filteredData = staffData.where((staff) {
+        return staff.fullName?.toLowerCase() != 'anyone';
+      }).toList();
+
       setState(() {
-        stylists = staffData;
-        filteredStylists = staffData;
+        stylists = filteredData;
+        filteredStylists = filteredData;
         _isLoadingStylists = false;
       });
     } catch (e) {
@@ -824,6 +844,10 @@ class _HomeScreenViewState extends State<HomeScreenView> with TickerProviderStat
   Widget _buildStoreInfo() {
     if (_selectedSalon == null) return Container();
 
+    // ✅ USE REAL DATA FROM SELECTED SALON
+    final double rating = _selectedSalon!.rating;
+    final int reviewCount = _selectedSalon!.reviews;
+
     return Card(
       elevation: 2,
       color: AppColors.porcelainColor,
@@ -871,36 +895,38 @@ class _HomeScreenViewState extends State<HomeScreenView> with TickerProviderStat
                   color: Colors.amber,
                 ),
                 SizedBox(width: isTablet ? 6 : 4),
-                Text(
-                  '4.8 (120 reviews)',
-                  style: TextStyle(fontSize: isTablet ? 16 : 14),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: _showSalonInfoModal,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isTablet ? 12 : 8,
-                      vertical: isTablet ? 6 : 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(isTablet ? 12 : 8),
-                      border: Border.all(
-                        color: AppColors.primaryColor.withOpacity(0.3),
-                        width: 1,
-                      ),
-                    ),
-                    child: Text(
-                      'Open',
-                      style: TextStyle(
-                        color: AppColors.primaryColor,
-                        fontSize: isTablet ? 14 : 12,
-                        fontWeight: FontWeight.bold,
-                      ),
+
+                // ===== CLICKABLE REVIEWS SECTION =====
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _showSalonInfoModal(initialTab: 0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          // ✅ FORMAT RATING: Show 1 decimal if > 0, otherwise "No rating"
+                          reviewCount > 0
+                              ? '${rating.toStringAsFixed(1)} ($reviewCount review${reviewCount == 1 ? "" : "s"})'
+                              : 'No reviews yet',
+                          style: TextStyle(
+                            fontSize: isTablet ? 16 : 14,
+                            color: reviewCount > 0 ? Colors.black87 : Colors.grey[600],
+                          ),
+                        ),
+                        if (reviewCount > 0) ...[
+                          SizedBox(width: isTablet ? 6 : 4),
+                          Icon(
+                            Icons.keyboard_arrow_down,
+                            size: isTablet ? 20 : 18,
+                            color: AppColors.primaryColor,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
+
+                const Spacer(),
               ],
             ),
           ],
@@ -1472,11 +1498,13 @@ class StylistModel {
 class SalonInfoModal extends StatefulWidget {
   final NailStoreSimple salon;
   final NailStoreModel storeDetails;
+  final int initialTabIndex; // Add this parameter
 
   const SalonInfoModal({
     super.key,
     required this.salon,
     required this.storeDetails,
+    this.initialTabIndex = 0, // Default to Reviews tab
   });
 
   @override
@@ -1487,219 +1515,569 @@ class _SalonInfoModalState extends State<SalonInfoModal>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // Mock data for reviews (since you don't have actual review data)
-  final List<Map<String, dynamic>> reviews = [
-    {
-      'name': 'Amit Patel',
-      'initial': 'A',
-      'comment': 'Amazing service and friendly staff. Highly recommended!',
-      'rating': 5,
-      'color': Colors.purple.withOpacity(0.1),
-    },
-    {
-      'name': 'Sneha R.',
-      'initial': 'S',
-      'comment': 'Great experience, very professional.',
-      'rating': 4,
-      'color': Colors.blue.withOpacity(0.1),
-    },
-    {
-      'name': 'Maya K.',
-      'initial': 'M',
-      'comment': 'Perfect nail art! Will definitely come back.',
-      'rating': 5,
-      'color': Colors.pink.withOpacity(0.1),
-    },
-  ];
+  // Reviews data
+  List<ReviewModel> reviews = [];
+  bool _isLoadingReviews = false;
+  bool _hasMoreReviews = true;
+  int _reviewPage = 0;
+  final ScrollController _reviewScrollController = ScrollController();
 
-  // Mock gallery images
-  final List<String> galleryImages = [
-    AppImages.salon,
-    AppImages.salon1,
-    AppImages.nail1,
-    AppImages.nail2,
-    AppImages.nail3,
-    AppImages.nail4,
-  ];
+  // Gallery data
+  List<GalleryModel> gallery = [];
+  bool _isLoadingGallery = false;
+  bool _hasMoreGallery = true;
+  int _galleryPage = 0;
+  final ScrollController _galleryScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
+
+    // Add scroll listeners
+    _reviewScrollController.addListener(_onReviewScroll);
+    _galleryScrollController.addListener(_onGalleryScroll);
+
+    // Load initial data
+    _loadReviews();
+    _loadGallery();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _reviewScrollController.dispose();
+    _galleryScrollController.dispose();
     super.dispose();
+  }
+
+  // ===== LOAD REVIEWS =====
+  Future<void> _loadReviews() async {
+    if (_isLoadingReviews || !_hasMoreReviews) return;
+
+    setState(() => _isLoadingReviews = true);
+
+    try {
+      final response = await ApiService.getStoreReviews(
+        storeId: widget.salon.id,
+        page: _reviewPage,
+        size: 10,
+      );
+
+      if (response.isSuccess && response.data != null) {
+        // Try parsing
+        try {
+          final newReviews = PageResponseParser.parsePageContent<ReviewModel>(
+            response.data!,
+                (json) => ReviewModel.fromJson(json),
+          );
+
+          final isLast = PageResponseParser.isLastPage(response.data!);
+
+          setState(() {
+            reviews.addAll(newReviews);
+            _reviewPage++;
+            _hasMoreReviews = !isLast;
+            _isLoadingReviews = false;
+          });
+        } catch (parseError) {
+          print('❌ PARSE ERROR: $parseError');
+          print('❌ Parse stack trace: ${StackTrace.current}');
+          setState(() => _isLoadingReviews = false);
+        }
+
+      } else {
+        setState(() => _isLoadingReviews = false);
+      }
+    } catch (e, stackTrace) {
+      print('❌ EXCEPTION loading reviews: $e');
+      print('❌ Stack trace: $stackTrace');
+      setState(() => _isLoadingReviews = false);
+    }
+  }
+
+  // ===== LOAD GALLERY =====
+  Future<void> _loadGallery() async {
+    if (_isLoadingGallery || !_hasMoreGallery) {
+      print('⚠️ Skip loading gallery: isLoading=$_isLoadingGallery, hasMore=$_hasMoreGallery');
+      return;
+    }
+
+    setState(() => _isLoadingGallery = true);
+
+    try {
+      final response = await ApiService.getStoreGallery(
+        storeId: widget.salon.id,
+        page: _galleryPage,
+        size: 12,
+      );
+
+      if (response.isSuccess && response.data != null) {
+        try {
+          final newGallery = PageResponseParser.parsePageContent<GalleryModel>(
+            response.data!,
+                (json) => GalleryModel.fromJson(json),
+          );
+
+          final isLast = PageResponseParser.isLastPage(response.data!);
+
+          setState(() {
+            gallery.addAll(newGallery);
+            _galleryPage++;
+            _hasMoreGallery = !isLast;
+            _isLoadingGallery = false;
+          });
+
+        } catch (parseError, stackTrace) {
+          setState(() => _isLoadingGallery = false);
+        }
+
+      } else {
+        setState(() => _isLoadingGallery = false);
+      }
+    } catch (e, stackTrace) {
+      setState(() => _isLoadingGallery = false);
+    }
+  }
+
+  // ===== SCROLL LISTENERS =====
+  void _onReviewScroll() {
+    if (_reviewScrollController.position.pixels >=
+        _reviewScrollController.position.maxScrollExtent - 200) {
+      _loadReviews();
+    }
+  }
+
+  void _onGalleryScroll() {
+    if (_galleryScrollController.position.pixels >=
+        _galleryScrollController.position.maxScrollExtent - 200) {
+      _loadGallery();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
-          // Handle bar
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
 
-          // Tab bar
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicatorPadding: const EdgeInsets.all(4),
-              labelColor: Colors.black,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w600),
-              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
-              overlayColor: WidgetStateProperty.all(Colors.transparent),
-              tabs: const [
-                Tab(text: "Reviews"),
-                Tab(text: "Gallery"),
-              ],
-            ),
-          ),
+    final modalWidth = screenWidth > 600
+        ? (screenWidth * 0.7).clamp(500.0, 700.0)
+        : screenWidth * 0.95;
 
-          // Tab content
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildReviewsTab(),
-                _buildGalleryTab(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    final modalHeight = screenHeight * 0.85;
 
-  Widget _buildReviewsTab() {
-    return ListView.separated(
-      padding: const EdgeInsets.all(20),
-      itemCount: reviews.length,
-      separatorBuilder: (context, index) => const Divider(height: 24),
-      itemBuilder: (context, index) {
-        final review = reviews[index];
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Container(
+        width: modalWidth,
+        height: modalHeight,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(20),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: Column(
           children: [
-            // Avatar
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: review['color'],
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  review['initial'],
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(width: 12),
-
-            // Content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        review['name'],
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const Spacer(),
-                      // Rating
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.star,
-                            size: 16,
-                            color: Colors.amber,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            review['rating'].toString(),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    review['comment'],
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[700],
-                      height: 1.4,
+            // ===== HANDLE BAR & CLOSE BUTTON =====
+            Stack(
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
+                ),
+                Positioned(
+                  right: 8,
+                  top: 4,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, size: 24),
+                    onPressed: () => Navigator.of(context).pop(),
+                    color: Colors.grey[600],
+                    padding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
+
+            // Tab bar
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                indicatorPadding: const EdgeInsets.all(4),
+                indicator: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.shade300,
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                labelColor: Colors.black,
+                labelStyle: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontWeight: FontWeight.normal,
+                  fontSize: 15,
+                ),
+                overlayColor: WidgetStateProperty.all(Colors.transparent),
+                tabs: const [
+                  Tab(text: "Reviews"),
+                  Tab(text: "Gallery"),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Tab content
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildReviewsTab(),
+                  _buildGalleryTab(),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ===== REVIEWS TAB =====
+  Widget _buildReviewsTab() {
+    if (reviews.isEmpty && _isLoadingReviews) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.teal),
+      );
+    }
+
+    if (reviews.isEmpty && !_isLoadingReviews) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.rate_review_outlined, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No reviews yet',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      controller: _reviewScrollController,
+      padding: const EdgeInsets.all(20),
+      itemCount: reviews.length + (_hasMoreReviews ? 1 : 0),
+      separatorBuilder: (context, index) => const Divider(height: 24),
+      itemBuilder: (context, index) {
+        // Loading indicator at the end
+        if (index == reviews.length) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(color: Colors.teal),
+            ),
+          );
+        }
+
+        final review = reviews[index];
+        return _buildReviewItem(review);
+      },
+    );
+  }
+
+  // ===== REVIEW ITEM =====
+  Widget _buildReviewItem(ReviewModel review) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Avatar
+        CircleAvatar(
+          radius: 20,
+          backgroundImage: review.avatarUrl.isNotEmpty
+              ? NetworkImage(review.avatarUrl)
+              : null,
+          backgroundColor: Colors.teal.withOpacity(0.1),
+          child: review.avatarUrl.isEmpty
+              ? Text(
+            review.name.isNotEmpty ? review.name[0].toUpperCase() : '?',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.teal,
+            ),
+          )
+              : null,
+        ),
+
+        const SizedBox(width: 12),
+
+        // Content
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Name & Rating
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      review.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  // Rating
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.amber.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.star,
+                          size: 14,
+                          color: Colors.amber,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          review.rating.toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.amber,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 4),
+
+              // Date
+              Text(
+                review.formattedDate,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // Review text
+              if (review.text.isNotEmpty)
+                Text(
+                  review.text,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[800],
+                    height: 1.4,
+                  ),
+                ),
+
+              // Photos
+              if (review.photos.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 80,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: review.photos.length,
+                    itemBuilder: (context, photoIndex) {
+                      return GestureDetector(
+                        onTap: () => _showPhotoViewer(review.photos, photoIndex),
+                        child: Container(
+                          width: 80,
+                          margin: const EdgeInsets.only(right: 8),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              review.photos[photoIndex],
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: Colors.grey[200],
+                                  child: const Icon(Icons.image, color: Colors.grey),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ===== GALLERY TAB =====
+  Widget _buildGalleryTab() {
+    if (gallery.isEmpty && _isLoadingGallery) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.teal),
+      );
+    }
+
+    if (gallery.isEmpty && !_isLoadingGallery) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.photo_library_outlined, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No gallery images yet',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GridView.builder(
+      controller: _galleryScrollController,
+      padding: const EdgeInsets.all(20),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1,
+      ),
+      itemCount: gallery.length + (_hasMoreGallery ? 1 : 0),
+      itemBuilder: (context, index) {
+        // Loading indicator at the end
+        if (index == gallery.length) {
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.teal),
+          );
+        }
+
+        final image = gallery[index];
+        return GestureDetector(
+          onTap: () => _showPhotoViewer(
+            gallery.map((g) => g.imageUrl).toList(),
+            index,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              image.imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  color: Colors.grey[200],
+                  child: const Icon(Icons.image, size: 48, color: Colors.grey),
+                );
+              },
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  color: Colors.grey[200],
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                          : null,
+                      color: Colors.teal,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
         );
       },
     );
   }
 
-  Widget _buildGalleryTab() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: GridView.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1,
-        ),
-        itemCount: galleryImages.length,
-        itemBuilder: (context, index) {
-          return GestureDetector(
-            onTap: () {
-              // You can add image preview functionality here
-            },
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                galleryImages[index],
-                fit: BoxFit.cover,
+  // ===== PHOTO VIEWER =====
+  void _showPhotoViewer(List<String> photos, int initialIndex) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            PageView.builder(
+              itemCount: photos.length,
+              controller: PageController(initialPage: initialIndex),
+              itemBuilder: (context, index) {
+                return InteractiveViewer(
+                  child: Image.network(
+                    photos[index],
+                    fit: BoxFit.contain,
+                  ),
+                );
+              },
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
               ),
             ),
-          );
-        },
+          ],
+        ),
       ),
     );
   }

@@ -31,6 +31,7 @@ import '../view/profile_screen/profile_view.dart';
 import 'api_response_model.dart';
 import 'available_service.dart';
 import 'checkin_booking_model.dart';
+import 'day_off_model.dart';
 import 'gift_card_model.dart';
 import 'giftcard_model.dart';
 import 'heatmap_api_response.dart';
@@ -51,6 +52,338 @@ enum BookingStatus {
 class ApiService {
   static const String baseUrl =
       "https://api.glossify.salon/api/v1"; // đổi IP/server của bạn
+
+  static Future<List<DayOffModel>> getAllDayOffs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('accessToken');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/day-offs'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = json.decode(response.body);
+
+    print(data);
+    if (data['code'] == 950) {
+      List<dynamic> dayOffsJson = data['data'];
+      return dayOffsJson.map((json) => DayOffModel.fromJson(json)).toList();
+    } else {
+      throw Exception(data['message'] ?? 'Failed to load day-offs');
+    }
+  }
+
+// ========================================
+// 🔍 SEARCH DAY-OFFS BY STAFF NAME (Admin)
+// ========================================
+  static Future<List<DayOffModel>> searchDayOffsByStaffName(String staffName) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('accessToken');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/day-offs/search?staffName=${Uri.encodeComponent(staffName)}'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = json.decode(response.body);
+
+    if (data['code'] == 950) {
+      List<dynamic> dayOffsJson = data['data'];
+      return dayOffsJson.map((json) => DayOffModel.fromJson(json)).toList();
+    } else {
+      throw Exception(data['message'] ?? 'Failed to search day-offs');
+    }
+  }
+
+// ========================================
+// ✅ APPROVE DAY-OFF (Admin)
+// ========================================
+  static Future<Map<String, dynamic>> approveDayOff(int dayOffId, String adminNote) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('accessToken');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/day-offs/$dayOffId/approve?adminNote=${Uri.encodeComponent(adminNote)}'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = json.decode(response.body);
+
+    return {
+      'success': data['code'] == 952,
+      'message': data['message'],
+      'data': data['data'],
+    };
+  }
+
+// ========================================
+// ❌ REJECT DAY-OFF (Admin)
+// ========================================
+  static Future<Map<String, dynamic>> rejectDayOff(int dayOffId, String adminNote) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('accessToken');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/day-offs/$dayOffId/reject?adminNote=${Uri.encodeComponent(adminNote)}'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = json.decode(response.body);
+
+    return {
+      'success': data['code'] == 954,
+      'message': data['message'],
+      'data': data['data'],
+    };
+  }
+
+// ========================================
+// 📊 GET DAY-OFF STATISTICS (Admin) - Optional
+// ========================================
+  static Future<Map<String, dynamic>> getDayOffStats() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('accessToken');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/day-offs/stats'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = json.decode(response.body);
+
+    if (data['code'] == 950) {
+      return data['data'];
+    } else {
+      throw Exception(data['message'] ?? 'Failed to load statistics');
+    }
+  }
+
+  static Future<Map<String, dynamic>> createDayOffRequest({
+    required String dayOffType, // "FULL_DAY" or "PARTIAL_DAY"
+    required String recurrenceType, // "ONCE", "DATE_RANGE", "DAILY", "WEEKLY", "MONTHLY"
+    String? specificDate, // "2026-01-14" for ONCE type
+    String? startDate, // ✅ NEW: "2026-01-10" for DATE_RANGE
+    String? endDate,   // ✅ NEW: "2026-01-15" for DATE_RANGE
+    int? dayOfWeek, // 1-7 for WEEKLY type
+    int? dayOfMonth, // 1-31 for MONTHLY type
+    String? startTime, // "14:00" for PARTIAL_DAY
+    String? endTime, // "16:00" for PARTIAL_DAY
+    String? staffNote,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('accessToken');
+
+    final Map<String, dynamic> requestBody = {
+      'dayOffType': dayOffType,
+      'recurrenceType': recurrenceType,
+    };
+
+    if (specificDate != null) requestBody['specificDate'] = specificDate;
+    if (startDate != null) requestBody['startDate'] = startDate;  // ✅ NEW
+    if (endDate != null) requestBody['endDate'] = endDate;        // ✅ NEW
+    if (dayOfWeek != null) requestBody['dayOfWeek'] = dayOfWeek;
+    if (dayOfMonth != null) requestBody['dayOfMonth'] = dayOfMonth;
+    if (startTime != null) requestBody['startTime'] = startTime;
+    if (endTime != null) requestBody['endTime'] = endTime;
+    if (staffNote != null) requestBody['staffNote'] = staffNote;
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/staff/day-off/create'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: json.encode(requestBody),
+    );
+
+    final data = json.decode(response.body);
+
+    return {
+      'success': data['code'] == 900,
+      'message': data['message'],
+      'data': data['data'],
+    };
+  }
+
+  /// Get my day-off requests
+  static Future<List<DayOffModel>> getMyDayOffs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('accessToken');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/staff/day-off/my-requests'),
+      headers: {
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = json.decode(response.body);
+    if (data['code'] == 900 && data['data'] != null) {
+      return (data['data'] as List)
+          .map((item) => DayOffModel.fromJson(item))
+          .toList();
+    }
+    return [];
+  }
+
+  /// Cancel day-off request
+  static Future<Map<String, dynamic>> cancelDayOff(int dayOffId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('accessToken');
+
+    final response = await http.delete(
+      Uri.parse('$baseUrl/staff/day-off/$dayOffId'),
+      headers: {
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = json.decode(response.body);
+    return {
+      'success': data['code'] == 900,
+      'message': data['message'],
+    };
+  }
+
+  /// Get day-offs for a specific date (for calendar)
+  static Future<List<DayOffModel>> getDayOffsForDate({
+    required int staffId,
+    required DateTime date,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('accessToken');
+
+    final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/staff/day-off/for-date?staffId=$staffId&date=$dateStr'),
+      headers: {
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = json.decode(response.body);
+    if (data['code'] == 900 && data['data'] != null) {
+      return (data['data'] as List)
+          .map((item) => DayOffModel.fromJson(item))
+          .toList();
+    }
+    return [];
+  }
+
+// ===== GET REVIEWS WITH PAGINATION =====
+  static Future<ApiResponse<Map<String, dynamic>>> getStoreReviews({
+    required int storeId,
+    required int page,
+    int size = 10,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/auth/reviews/$storeId').replace(
+        queryParameters: {
+          'page': page.toString(),
+          'size': size.toString(),
+        },
+      );
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final jsonData = json.decode(response.body);
+        return ApiResponse.fromJson(jsonData);
+      } else if (response.statusCode == 404) {
+        return ApiResponse.error('Store not found', code: 404);
+      } else {
+        return ApiResponse.error('Failed to load reviews', code: response.statusCode);
+      }
+    } catch (e) {
+      print('Error loading reviews: $e');
+      return ApiResponse.error('Failed to load reviews');
+    }
+  }
+
+// ===== GET GALLERY WITH PAGINATION =====
+  // ===== GET GALLERY WITH PAGINATION =====
+  static Future<ApiResponse<Map<String, dynamic>>> getStoreGallery({
+    required int storeId,
+    required int page,
+    int size = 12,
+  }) async {
+    try {
+      // ✅ SỬA URL CHO ĐÚNG - DÙNG /auth/gallery/{storeId}
+      final url = Uri.parse('$baseUrl/auth/gallery/$storeId').replace(
+        queryParameters: {
+          'page': page.toString(),
+          'size': size.toString(),
+        },
+      );
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final jsonData = json.decode(response.body);
+        return ApiResponse.fromJson(jsonData);
+      } else if (response.statusCode == 404) {
+        return ApiResponse.error('Store not found', code: 404);
+      } else {
+        return ApiResponse.error('Failed to load gallery', code: response.statusCode);
+      }
+    } catch (e) {
+      print('❌ Error loading gallery: $e');
+      return ApiResponse.error('Failed to load gallery');
+    }
+  }
+
+  static Future<ApiResponse> changePassword({
+    required String newPassword,
+  }) async {
+    try {
+      final token = await getAccessToken();
+      if (token == null) throw Exception("Access token null");
+
+      final url = Uri.parse("$baseUrl/user/change-password");
+
+      final response = await http.post(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: json.encode({
+          "newPassword": newPassword,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final jsonData = json.decode(response.body);
+        return ApiResponse.fromJson(jsonData);
+      } else if (response.statusCode == 401) {
+        return ApiResponse.error('Unauthorized: Please login again', code: 401);
+      } else if (response.statusCode == 400) {
+        final jsonData = json.decode(response.body);
+        return ApiResponse.fromJson(jsonData);
+      } else {
+        return ApiResponse.error('Failed to change password', code: response.statusCode);
+      }
+    } catch (e) {
+      print('Error changing password: $e');
+      return ApiResponse.error('Failed to change password');
+    }
+  }
 
   static Future<ApiResponse<AvailableServicesDTO>> getAvailableServiceListForStaff(int staffId) async {
     try {
@@ -966,6 +1299,7 @@ class ApiService {
     String? description,
     double? cashPrice,
     required bool plus,
+    required int time,
     required int categoryId,
   }) async {
     try {
@@ -984,6 +1318,7 @@ class ApiService {
           'description': description,
           'cashPrice': cashPrice,
           'plus': plus,
+          'time': time,
           'categoryId': categoryId,
         }),
       );
@@ -1023,6 +1358,7 @@ class ApiService {
     String? description,
     double? cashPrice,
     required bool plus,
+    required int time,
     required int categoryId,
   }) async {
     try {
@@ -1041,6 +1377,7 @@ class ApiService {
           'description': description,
           'cashPrice': cashPrice,
           'plus': plus,
+          'time': time,
           'categoryId': categoryId,
         }),
       );
@@ -1283,6 +1620,57 @@ class ApiService {
       }
     } catch (e) {
       throw Exception("Failed to close shift: $e");
+    }
+  }
+
+  // Thêm vào api_service.dart
+
+  // Thêm vào api_service.dart
+
+  static Future<ApiResponse> downloadPayroll({
+    required String staffId,
+    required DateTime startDate,
+    required DateTime endDate,
+    required String role,
+  }) async {
+    try {
+      final token = await getAccessToken();
+      if (token == null) {
+        return ApiResponse.error("Access token not found", code: 401);
+      }
+
+      final startDateStr = startDate.toIso8601String().split('T')[0];
+      final endDateStr = endDate.toIso8601String().split('T')[0];
+
+      final uri = Uri.parse('$baseUrl/admin/$staffId/income-report/download').replace(
+        queryParameters: {
+          'startDate': startDateStr,
+          'endDate': endDateStr,
+          'role': role,
+        },
+      );
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final jsonData = json.decode(response.body);
+        return ApiResponse.fromJson(jsonData);
+      } else if (response.statusCode == 401) {
+        return ApiResponse.error("Unauthorized: Please login again", code: 401);
+      } else if (response.statusCode == 404) {
+        return ApiResponse.error("Staff not found", code: 404);
+      } else {
+        return ApiResponse.error("Server error: ${response.statusCode}", code: response.statusCode);
+      }
+    } catch (e) {
+      print('Error downloading payroll: $e');
+      return ApiResponse.error('Export payroll failed');
     }
   }
 
@@ -1814,6 +2202,7 @@ class ApiService {
     required String fullName,
     required String email,
     required String dob,
+    String? password
   }) async {
     try {
       final response = await http.post(
@@ -1823,7 +2212,8 @@ class ApiService {
           'phoneNumber': phoneNumber,
           'fullName': fullName,
           'email': email,
-          'dateOfBirth': dob
+          'dateOfBirth': dob,
+          'password': password!.isEmpty ? "" : password
         }),
       );
 
@@ -2181,6 +2571,47 @@ class ApiService {
       throw Exception('Error fetching staff income detail: $e');
     }
   }
+
+  static Future<ApiResponse> getBookingIncomeDetail({
+    required String staffId,
+    required String bookingId,
+  }) async {
+    try {
+      final token = await getAccessToken();
+
+      final uri = Uri.parse('$baseUrl/admin/$staffId/booking/$bookingId/income-detail');
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final jsonData = json.decode(response.body);
+
+        if (jsonData['data'] != null) {
+          jsonData['data'] = Map<String, dynamic>.from(jsonData['data']);
+        }
+
+        return ApiResponse.fromJson(jsonData);
+      } else if (response.statusCode == 401) {
+        throw Exception('Unauthorized: Please login again');
+      } else if (response.statusCode == 404) {
+        throw Exception('Booking not found');
+      } else {
+        throw Exception(
+          'Failed to load booking income detail: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('Error fetching booking income detail: $e');
+      throw Exception('Error fetching booking income detail: $e');
+    }
+  }
+
 
   static Future<ApiResponse> getDashboardStats({
     required DateTime startDate,
@@ -2916,10 +3347,12 @@ class ApiService {
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
 
-        // SỬA: Parse data theo cách mới
+        // ✅ FIX: Parse data.content thay vì toàn bộ jsonResponse
+        final pageData = jsonResponse['data'] as Map<String, dynamic>;
+
         final staffList = PageResponseParser.parsePageContent(
-          jsonResponse,
-          (item) => ManagementStaffDTO.fromJson(item),
+          pageData, // ✅ Pass pageData (chứa content, pageable, etc.)
+              (item) => ManagementStaffDTO.fromJson(item),
         );
 
         return ApiResponse<List<ManagementStaffDTO>>(
@@ -2933,6 +3366,7 @@ class ApiService {
         throw Exception('Failed to get staff list: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ getStaffList error: $e');
       throw Exception('Staff list error: $e');
     }
   }
@@ -3116,9 +3550,12 @@ class ApiService {
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
 
+        // ✅ DEBUG: Log full response structure
+        final pageData = jsonResponse['data'] as Map<String, dynamic>;
+
         final categoryList = PageResponseParser.parsePageContent(
-          jsonResponse,
-          (item) => ManagementCategoryDTO.fromJson(item),
+          pageData,
+              (item) => ManagementCategoryDTO.fromJson(item),
         );
 
         return ApiResponse<List<ManagementCategoryDTO>>(
@@ -3131,7 +3568,7 @@ class ApiService {
       } else {
         throw Exception('Failed to get category list: ${response.statusCode}');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       throw Exception('Category list error: $e');
     }
   }
@@ -3158,9 +3595,12 @@ class ApiService {
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
 
+        // ✅ FIX: Parse data.content thay vì toàn bộ jsonResponse
+        final pageData = jsonResponse['data'] as Map<String, dynamic>;
+
         final serviceList = PageResponseParser.parsePageContent(
-          jsonResponse,
-          (item) => ManagementServiceDTO.fromJson(item),
+          pageData, // ✅ Pass pageData (chứa content, pageable, etc.)
+              (item) => ManagementServiceDTO.fromJson(item),
         );
 
         return ApiResponse<List<ManagementServiceDTO>>(
@@ -3174,6 +3614,7 @@ class ApiService {
         throw Exception('Failed to get service list: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ getServiceList error: $e');
       throw Exception('Service list error: $e');
     }
   }
@@ -3656,10 +4097,9 @@ class ApiService {
     final token = await getAccessToken(); // Hoặc cách lấy token của bạn
 
     final response = await http.get(
-      Uri.parse('$baseUrl/user/service/$storeId'),
+      Uri.parse('$baseUrl/auth/service/$storeId'),
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token', // Thêm token vào header
       },
     );
 
@@ -3805,6 +4245,7 @@ class ApiService {
               "Bearer $token", // nếu API ko cần auth thì bỏ dòng này
         },
       );
+      print(response.body);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> resBody = jsonDecode(response.body);
@@ -3824,16 +4265,11 @@ class ApiService {
 
   static Future<StaffDetail> getStaffDetail(int staffId) async {
     try {
-      final token = await getAccessToken(); // nếu có token
-      if (token == null) throw Exception("Access token null");
-
-      final url = Uri.parse("$baseUrl/user/staff-detail/$staffId");
+      final url = Uri.parse("$baseUrl/auth/staff-detail/$staffId");
       final response = await http.get(
         url,
         headers: {
           "Content-Type": "application/json",
-          "Authorization":
-              "Bearer $token", // nếu API ko cần auth thì bỏ dòng này
         },
       );
 
@@ -3855,16 +4291,11 @@ class ApiService {
 
   static Future<List<StaffSimple>> getAllStaff(int storeId) async {
     try {
-      final token = await getAccessToken(); // nếu có token
-      if (token == null) throw Exception("Access token null");
-
-      final url = Uri.parse("$baseUrl/user/get-all-staff/$storeId");
+      final url = Uri.parse("$baseUrl/auth/get-all-staff/$storeId");
       final response = await http.get(
         url,
         headers: {
           "Content-Type": "application/json",
-          "Authorization":
-              "Bearer $token", // nếu API không cần auth thì bỏ dòng này
         },
       );
 
@@ -3887,16 +4318,11 @@ class ApiService {
 
   static Future<List<NailStoreSimple>> getStores() async {
     try {
-      final token = await getAccessToken(); // nếu có token
-      if (token == null) throw Exception("Access token null");
-
-      final url = Uri.parse("$baseUrl/user/get-stores");
+      final url = Uri.parse("$baseUrl/auth/get-stores");
       final response = await http.get(
         url,
         headers: {
           "Content-Type": "application/json",
-          "Authorization":
-              "Bearer $token", // nếu API không cần auth thì bỏ dòng này
         },
       );
 
@@ -4062,6 +4488,7 @@ class ApiService {
     required String customerPhone,
     required String startTime,
     required int storeId,
+    required bool markUnchange,
     required List<int> serviceIds,
   }) async {
     try {
@@ -4082,6 +4509,7 @@ class ApiService {
           'startTime': startTime,
           'storeId': storeId,
           'serviceIds': serviceIds,
+          'markUnchange': markUnchange
         }),
       );
 
@@ -4105,6 +4533,7 @@ class ApiService {
     required String customerPhone,
     required String startTime,
     required int storeId,
+    required bool markUnchange,
     required List<int> serviceIds,
   }) async {
     try {
@@ -4125,6 +4554,7 @@ class ApiService {
           'startTime': startTime,
           'storeId': storeId,
           'serviceIds': serviceIds,
+          'markUnchange': markUnchange
         }),
       );
 
@@ -4294,6 +4724,36 @@ class ApiService {
       return NailStoreModel.fromJson(storeJson);
     } else {
       throw Exception('Failed to load store');
+    }
+  }
+
+  // ===== GET STORE ID =====
+  // ===== GET STORE ID =====
+  static Future<int> getStoreId() async {
+    try {
+      final token = await getAccessToken();
+      if (token == null) throw Exception("Access token null");
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/user/get-store'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      print(response.body);
+
+      if (response.statusCode == 200) {
+        // ✅ Response body is just a number: "5"
+        final storeId = int.parse(response.body);
+
+        return storeId;
+      } else {
+        throw Exception('Failed to get store ID: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Store ID error: $e');
     }
   }
 

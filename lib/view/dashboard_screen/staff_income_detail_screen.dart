@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 
+import '../../api/api_response_model.dart';
 import '../../api/api_service.dart';
 
 enum TimeFilter { today, thisWeek, custom }
@@ -51,27 +52,23 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
       vsync: this,
     );
 
-    // Gán giá trị tạm an toàn (để tránh lỗi late init)
     _localStartDate = DateTime.now();
     _localEndDate = DateTime.now();
     _datesChanged = false;
 
-    // Chờ role sẵn sàng trước khi load danh sách
     _initData();
   }
 
   Future<void> _initData() async {
-    await _getUserRole(); // 🔹 Chờ load role xong
+    await _getUserRole();
     if (!mounted) return;
-
-    // Sau khi có role và date range => mới gọi API
     await _loadStaffList();
   }
 
   Future<void> _getUserRole() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (!mounted) return; // ✅ tránh setState sau khi dispose
+      if (!mounted) return;
 
       final role = prefs.getString('role') ?? 'OWNER';
       setState(() {
@@ -133,15 +130,20 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
       );
 
       if (response.isSuccess && response.data != null) {
+        // ✅ Filter out "Anyone" staff
+        final allStaff = (response.data as List)
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+
+        final filteredStaff = allStaff.where((staff) {
+          final name = (staff['fullName'] ?? staff['name'] ?? '').toString().trim().toLowerCase();
+          return name != 'anyone';
+        }).toList();
+
         setState(() {
-          // Cast data to List
-          _staffList =
-              (response.data as List)
-                  .map((item) => Map<String, dynamic>.from(item))
-                  .toList();
+          _staffList = filteredStaff;
           _isLoading = false;
 
-          // Auto-select staff
           if (_staffList.isNotEmpty) {
             if (_selectedStaffId == null ||
                 !_staffList.any((s) => s['id'] == _selectedStaffId)) {
@@ -151,19 +153,11 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
           }
         });
       } else {
-        setState(() {
-          _isLoading = false;
-        });
-
-        // Safe to show SnackBar now
+        setState(() => _isLoading = false);
         _showErrorSnackBar(response.message);
       }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      // Safe to show SnackBar now
+      setState(() => _isLoading = false);
       _showErrorSnackBar('Error loading staff list: $e');
     }
   }
@@ -173,34 +167,191 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
 
     try {
       final response = await ApiService.getStaffIncomeDetail(
-          staffId: staffId,
-          startDate: _localStartDate,
-          endDate: _localEndDate,
-          role: _userRole
+        staffId: staffId,
+        startDate: _localStartDate,
+        endDate: _localEndDate,
+        role: _userRole,
       );
 
       if (response.isSuccess && response.data != null) {
         setState(() {
-          // Cast data to Map
           _selectedStaffDetail = Map<String, dynamic>.from(response.data);
           _isLoadingDetail = false;
         });
 
         _animationController.forward(from: 0.0);
       } else {
-        setState(() {
-          _isLoadingDetail = false;
-        });
-
+        setState(() => _isLoadingDetail = false);
         _showErrorSnackBar(response.message);
       }
     } catch (e) {
-      setState(() {
-        _isLoadingDetail = false;
-      });
-
+      setState(() => _isLoadingDetail = false);
       _showErrorSnackBar('Error loading staff detail: $e');
     }
+  }
+
+  // ===== CLICK VÀO BOOKING ID - HIỂN THỊ DIALOG GIỮA MÀN HÌNH =====
+  Future<void> _showBookingDetailDialog(String bookingId) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Colors.teal),
+      ),
+    );
+
+    try {
+      final response = await ApiService.getBookingIncomeDetail(
+        staffId: _selectedStaffId!,
+        bookingId: bookingId,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading
+
+      if (response.isSuccess && response.data != null) {
+        final data = Map<String, dynamic>.from(response.data);
+        _showBookingDetailCenterDialog(data);
+      } else {
+        _showErrorSnackBar(response.message);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      _showErrorSnackBar('Error loading booking detail: $e');
+    }
+  }
+
+  // ===== HIỂN THỊ DIALOG Ở GIỮA MÀN HÌNH =====
+  void _showBookingDetailCenterDialog(Map<String, dynamic> data) {
+    final services = (data['services'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final tipAmount = data['tipAmount'] ?? 0.0;
+    final totalServicePrice = data['totalServicePrice'] ?? 0.0;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Booking #${data['bookingId']}',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.teal,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${data['customerName']} • ${data['bookingDate']}',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Services
+              const Text(
+                'Services',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: services.map((service) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              service['serviceName'] ?? '',
+                              style: const TextStyle(fontSize: 15),
+                            ),
+                          ),
+                          Text(
+                            _formatCurrency(service['finalPrice'] ?? 0.0),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.teal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )).toList(),
+                  ),
+                ),
+              ),
+
+              const Divider(height: 24),
+
+              // Summary
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Service Total',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    _formatCurrency(totalServicePrice),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Tip (proportional)',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    _formatCurrency(tipAmount),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showErrorSnackBar(String message) {
@@ -225,11 +376,10 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
   List<Map<String, dynamic>> get _filteredStaffList {
     if (_searchQuery.isEmpty) return _staffList;
     return _staffList
-        .where(
-          (staff) => staff['name'].toString().toLowerCase().contains(
-        _searchQuery.toLowerCase(),
-      ),
-    )
+        .where((staff) => staff['name']
+        .toString()
+        .toLowerCase()
+        .contains(_searchQuery.toLowerCase()))
         .toList();
   }
 
@@ -243,7 +393,6 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
   }
 
   void _setDateRangeForFilter(TimeFilter filter) {
-    // Chỉ cho phép SUPER_OWNER thay đổi date range
     if (_userRole != 'SUPER_OWNER') return;
 
     final now = DateTime.now();
@@ -273,7 +422,6 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
   }
 
   Future<void> _selectCustomDateRange() async {
-    // Chỉ cho phép SUPER_OWNER chọn custom date range
     if (_userRole != 'SUPER_OWNER') return;
 
     final now = DateTime.now();
@@ -316,7 +464,6 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
     final isSelected = _localSelectedFilter == filter;
     return InkWell(
       onTap: () {
-        // Chỉ cho phép SUPER_OWNER sử dụng filter buttons
         if (_userRole != 'SUPER_OWNER') return;
 
         final oldStart = _localStartDate;
@@ -362,9 +509,9 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  Text(
+                  const Text(
                     'Select Staff',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
@@ -375,17 +522,10 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
                     decoration: InputDecoration(
                       hintText: 'Search staff...',
                       hintStyle: TextStyle(color: Colors.grey.shade400),
-                      prefixIcon: Icon(
-                        Icons.search,
-                        color: Colors.grey.shade400,
-                      ),
-                      suffixIcon:
-                      _searchQuery.isNotEmpty
+                      prefixIcon: Icon(Icons.search, color: Colors.grey.shade400),
+                      suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
-                        icon: const Icon(
-                          Icons.clear,
-                          color: Colors.grey,
-                        ),
+                        icon: const Icon(Icons.clear, color: Colors.grey),
                         onPressed: () {
                           _searchController.clear();
                           setModalState(() => _searchQuery = '');
@@ -409,8 +549,7 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
                   ),
                   const SizedBox(height: 16),
                   Expanded(
-                    child:
-                    _filteredStaffList.isEmpty
+                    child: _filteredStaffList.isEmpty
                         ? const Center(
                       child: Text(
                         'No staff found',
@@ -421,8 +560,7 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
                       itemCount: _filteredStaffList.length,
                       itemBuilder: (context, index) {
                         final staff = _filteredStaffList[index];
-                        final isSelected =
-                            staff['id'] == _selectedStaffId;
+                        final isSelected = staff['id'] == _selectedStaffId;
 
                         return ListTile(
                           leading: _buildStaffAvatar(staff),
@@ -537,7 +675,7 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
 
   Widget _buildSimpleStatRow(String label, Widget valueWidget) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0), // Thêm padding trái phải
+      padding: const EdgeInsets.symmetric(horizontal: 12.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -567,7 +705,6 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Shimmer for avatar and name
             Shimmer.fromColors(
               baseColor: Colors.grey[300]!,
               highlightColor: Colors.grey[100]!,
@@ -587,11 +724,10 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
               ),
             ),
             const SizedBox(height: 24),
-            // Shimmer for financial details
             ...List.generate(
-              4,
+              10,
                   (index) => Padding(
-                padding: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.only(bottom: 8),
                 child: Shimmer.fromColors(
                   baseColor: Colors.grey[300]!,
                   highlightColor: Colors.grey[100]!,
@@ -605,40 +741,6 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
                 ),
               ),
             ),
-            const SizedBox(height: 24),
-            // Shimmer for additional stats
-            ...List.generate(
-              3,
-                  (index) => Padding(
-                padding: EdgeInsets.only(bottom: index < 2 ? 12 : 0),
-                child: Shimmer.fromColors(
-                  baseColor: Colors.grey[300]!,
-                  highlightColor: Colors.grey[100]!,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(width: 120, height: 16, color: Colors.white),
-                      Container(width: 80, height: 16, color: Colors.white),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            // Shimmer for chart section
-            Shimmer.fromColors(
-              baseColor: Colors.grey[300]!,
-              highlightColor: Colors.grey[100]!,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(width: 150, height: 20, color: Colors.white),
-                  const SizedBox(height: 16),
-                  Container(height: 250, color: Colors.white),
-                ],
-              ),
-            ),
-            const SizedBox(height: 80),
           ],
         ),
       ),
@@ -659,7 +761,8 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
         height: 40,
         fit: BoxFit.cover,
         placeholder: (context, url) => _buildStaffPlaceholderAvatar(staffName),
-        errorWidget: (context, url, error) => _buildStaffPlaceholderAvatar(staffName),
+        errorWidget: (context, url, error) =>
+            _buildStaffPlaceholderAvatar(staffName),
       )
           : _buildStaffPlaceholderAvatar(staffName),
     );
@@ -701,7 +804,8 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
         height: 60,
         fit: BoxFit.cover,
         placeholder: (context, url) => _buildPlaceholderAvatar(staffName),
-        errorWidget: (context, url, error) => _buildPlaceholderAvatar(staffName),
+        errorWidget: (context, url, error) =>
+            _buildPlaceholderAvatar(staffName),
       )
           : _buildPlaceholderAvatar(staffName),
     );
@@ -728,6 +832,522 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
     );
   }
 
+  // ===== BUILD BOOKINGS TABLE - CẬP NHẬT PHẦN HIỂN THỊ SERVICES =====
+  Widget _buildBookingsTable() {
+    final bookings = (_selectedStaffDetail!['bookings'] as List?)
+        ?.cast<Map<String, dynamic>>() ??
+        [];
+
+    if (bookings.isEmpty) {
+      return Container(
+        height: 200,
+        alignment: Alignment.center,
+        child: const Text(
+          'No bookings found',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Table Header
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.shade300, width: 1),
+            ),
+          ),
+          child: Row(
+            children: const [
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Booking ID',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  'Services',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Price',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Tips',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Table Rows với HEIGHT CỐ ĐỊNH = 200px
+        Container(
+          height: 200, // ⭐ Giảm xuống 200px
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(8),
+              bottomRight: Radius.circular(8),
+            ),
+          ),
+          child: Scrollbar(
+            thumbVisibility: bookings.length > 4,
+            child: ListView.builder(
+              itemCount: bookings.length,
+              itemBuilder: (context, index) {
+                final booking = bookings[index];
+                final bookingId = booking['bookingId'].toString();
+                final serviceNames =
+                    (booking['serviceNames'] as List?)?.cast<String>() ?? [];
+                final serviceTotal = booking['serviceTotal'] ?? 0.0;
+                final tipAmount = booking['tipAmount'] ?? 0.0;
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: index < bookings.length - 1
+                          ? BorderSide(color: Colors.grey.shade200, width: 0.5)
+                          : BorderSide.none,
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Booking ID (clickable)
+                      Expanded(
+                        flex: 2,
+                        child: GestureDetector(
+                          onTap: () => _showBookingDetailDialog(bookingId),
+                          child: Text(
+                            'Booking ID#$bookingId',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.blue,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // ⭐ Services - MỖI SERVICE 1 DÒNG, TỐI ĐA 10 KÝ TỰ
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: serviceNames.map((serviceName) {
+                            // Truncate nếu > 10 ký tự
+                            final displayName = serviceName.length > 14
+                                ? '${serviceName.substring(0, 14)}...'
+                                : serviceName;
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: Text(
+                                displayName,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  height: 1.2,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+
+                      // Price
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          _formatCurrency(serviceTotal),
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+
+                      // Tips
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          _formatCurrency(tipAmount),
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+// ===== THÊM 2 NÚT: COMMISSION STRUCTURE VÀ TẢI =====
+  Widget _buildActionButtons() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Row(
+        children: [
+          // Commission Structure Button
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () {
+                // TODO: Show commission structure dialog
+                _showCommissionStructureDialog();
+              },
+              label: const Text(
+                'Commission Structure',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.teal,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                side: const BorderSide(color: Colors.teal, width: 1.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Download Button
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () {
+                // TODO: Download functionality
+                _showDownloadDialog();
+              },
+              label: const Text(
+                'Download',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// ===== DIALOG COMMISSION STRUCTURE =====
+  void _showCommissionStructureDialog() {
+    final detail = _selectedStaffDetail;
+    if (detail == null) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Commission Structure',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.teal,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              _buildCommissionRow(
+                'Service Commission',
+                '${detail['commissionServiceRate']?.toStringAsFixed(1) ?? '0.0'}%',
+              ),
+              const Divider(height: 24),
+              _buildCommissionRow(
+                'Product Commission',
+                '${detail['commissionProductRate']?.toStringAsFixed(1) ?? '0.0'}%',
+              ),
+              const Divider(height: 24),
+              _buildCommissionRow(
+                'Gift Card Commission',
+                '${detail['commissionGiftcardRate']?.toStringAsFixed(1) ?? '0.0'}%',
+              ),
+              const Divider(height: 24),
+              _buildCommissionRow(
+                'Cash/Check Percentage',
+                '${detail['cashCheckPercentage']?.toStringAsFixed(1) ?? '0.0'}%',
+              ),
+              const Divider(height: 24),
+              _buildCommissionRow(
+                'Credit Card Tip Charge',
+                '${detail['percentageChargeForCreditCardTips']?.toStringAsFixed(1) ?? '0.0'}%',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCommissionRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: Colors.teal,
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  // ===== DIALOG TẢI - ĐƠN GIẢN =====
+  void _showDownloadDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.download, color: Colors.teal, size: 24),
+            SizedBox(width: 8),
+            Text(
+              'Export Payroll',
+              style: TextStyle(fontSize: 18),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Export staff income report to Telegram?',
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _handleDownloadPayroll();
+            },
+            icon: const Icon(Icons.send, size: 18),
+            label: const Text('Export'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// ===== HANDLE DOWNLOAD - ĐƠN GIẢN =====
+  Future<void> _handleDownloadPayroll() async {
+    if (_selectedStaffId == null) {
+      _showToast('No staff selected', isSuccess: false);
+      return;
+    }
+
+    // Show loading overlay
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: const Center(
+          child: Card(
+            margin: EdgeInsets.symmetric(horizontal: 40),
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircularProgressIndicator(
+                      color: Colors.teal,
+                      strokeWidth: 3,
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                  Text(
+                    'Exporting payroll...',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Please wait',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final response = await ApiService.downloadPayroll(
+        staffId: _selectedStaffId!,
+        startDate: _localStartDate,
+        endDate: _localEndDate,
+        role: _userRole,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pop(context); // Close loading
+
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      if (response.isSuccess) {
+        _showToast(response.message ?? "Xuất bảng lương thành công", isSuccess: true);
+      } else {
+        _showToast(response.message ?? "Xuất bảng lương thất bại", isSuccess: false);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      await Future.delayed(const Duration(milliseconds: 100));
+      _showToast('Export payroll failed: $e', isSuccess: false);
+    }
+  }
+
+// ===== TOAST HELPER =====
+  void _showToast(String message, {required bool isSuccess}) {
+    if (!mounted) return;
+
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isSuccess ? Icons.check_circle : Icons.error,
+              color: Colors.white,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isSuccess ? Colors.green.shade600 : Colors.red.shade600,
+        duration: Duration(seconds: isSuccess ? 3 : 5),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        // Đưa lên top: bottom ≈ screenHeight - 100 (cách top ~80-100px)
+        margin: EdgeInsets.only(
+          bottom: screenHeight - 120,   // Điều chỉnh số này để lên cao/thấp hơn
+          left: 16,
+          right: 16,
+        ),
+        elevation: 6,
+        action: SnackBarAction(
+          label: 'OK',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
+  }
+
+// ===== CẬP NHẬT BUILD METHOD - THÊM 2 NÚT SAU BOOKINGS TABLE =====
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -760,7 +1380,7 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
       ),
       body: Column(
         children: [
-          // Date filter row - HIỂN THỊ CHO CẢ HAI ROLE NHƯNG KHÁC NHAU
+          // Date filter row
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Row(
@@ -773,13 +1393,10 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
                 const SizedBox(width: 6),
                 Expanded(
                   child: GestureDetector(
-                    onTap:
-                    _userRole == 'SUPER_OWNER'
-                        ? _selectCustomDateRange
-                        : null,
+                    onTap: _userRole == 'SUPER_OWNER' ? _selectCustomDateRange : null,
                     child: Text(
                       _getDateRangeText(),
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 11,
                         color: Color(0xFF9E9E9E),
                         fontWeight: FontWeight.w500,
@@ -787,7 +1404,6 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
                     ),
                   ),
                 ),
-                // Chỉ hiển thị filter buttons cho SUPER_OWNER
                 if (_userRole == 'SUPER_OWNER') ...[
                   _buildFilterButton('Today', TimeFilter.today),
                   const SizedBox(width: 6),
@@ -798,8 +1414,7 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color:
-                        _localSelectedFilter == TimeFilter.custom
+                        color: _localSelectedFilter == TimeFilter.custom
                             ? Colors.teal.withOpacity(0.1)
                             : Colors.grey.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -807,8 +1422,7 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
                       child: Icon(
                         Icons.date_range,
                         size: 14,
-                        color:
-                        _localSelectedFilter == TimeFilter.custom
+                        color: _localSelectedFilter == TimeFilter.custom
                             ? Colors.teal
                             : Colors.grey,
                       ),
@@ -819,10 +1433,9 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
             ),
           ),
 
-          // Staff detail section
+          // Content
           Expanded(
-            child:
-            (_isLoadingDetail || _isLoading)
+            child: (_isLoadingDetail || _isLoading)
                 ? _buildDetailShimmer()
                 : _selectedStaffDetail == null
                 ? const Center(
@@ -875,170 +1488,129 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
 
                     const SizedBox(height: 24),
 
-                    // Financial details
+                    // ===== BOOKINGS TABLE =====
+                    _buildBookingsTable(),
+
+                    // ⭐ 2 NÚT MỚI: COMMISSION STRUCTURE & TẢI
+                    _buildActionButtons(),
+
+                    const Divider(height: 24, thickness: 2),
+
+                    // ===== FINANCIAL DETAILS =====
                     _buildDetailRow(
-                      'Total Revenue',
-                      _selectedStaffDetail!['totalRevenue'],
+                      'Income',
+                      _selectedStaffDetail!['income'] ?? 0.0,
                     ),
-                    Divider(height: 32, color: Colors.grey.shade200),
+                    Divider(height: 24, color: Colors.grey.shade200),
                     _buildDetailRow(
-                      'Current Commission(${_selectedStaffDetail!['commissionRate']}%)',
-                      _selectedStaffDetail!['commission'],
+                      'Supply Share',
+                      -(_selectedStaffDetail!['supplyShare'] ?? 0.0),
                     ),
-                    Divider(height: 32, color: Colors.grey.shade200),
+                    Divider(height: 24, color: Colors.grey.shade200),
                     _buildDetailRow(
-                      'Total Tip',
-                      _selectedStaffDetail!['totalTip'],
+                      'Commission',
+                      _selectedStaffDetail!['commission'] ?? 0.0,
                     ),
-                    Divider(height: 32, color: Colors.grey.shade200),
+                    Divider(height: 24, color: Colors.grey.shade200),
                     _buildDetailRow(
-                      'Total Income',
-                      _selectedStaffDetail!['totalIncome'],
+                      'Card Charge',
+                      -(_selectedStaffDetail!['cardCharge'] ?? 0.0),
+                    ),
+                    Divider(height: 24, color: Colors.grey.shade200),
+                    _buildDetailRow(
+                      'Cash Discount Charge',
+                      0.0,
+                    ),
+                    Divider(height: 24, color: Colors.grey.shade200),
+                    _buildDetailRow(
+                      'Discount Charge',
+                      -(_selectedStaffDetail!['discountCharge'] ?? 0.0),
+                    ),
+
+                    const Divider(height: 32, thickness: 1),
+
+                    _buildDetailRow(
+                      'Tip by card (1)',
+                      _selectedStaffDetail!['tipByCard'] ?? 0.0,
+                    ),
+                    Divider(height: 24, color: Colors.grey.shade200),
+                    _buildDetailRow(
+                      'Tip charge by card (2)',
+                      -(_selectedStaffDetail!['tipChargeByCard'] ?? 0.0),
+                    ),
+                    Divider(height: 24, color: Colors.grey.shade200),
+                    _buildDetailRow(
+                      'Tip by cash (3)',
+                      _selectedStaffDetail!['tipByCash'] ?? 0.0,
+                    ),
+                    Divider(height: 24, color: Colors.grey.shade200),
+                    _buildDetailRow(
+                      'Total tip (1-2+3)',
+                      _selectedStaffDetail!['totalTip'] ?? 0.0,
                       isBold: true,
                     ),
 
-                    const SizedBox(height: 12),
+                    const Divider(height: 32, thickness: 1),
 
-                    // Keep existing stats
-                    _buildSimpleStatRow(
-                      'Clients Served',
-                      _buildAnimatedInt(
-                        _selectedStaffDetail!['clientsServed'],
-                      ),
+                    _buildDetailRow(
+                      'Cash Income:',
+                      _selectedStaffDetail!['cashIncome'] ?? 0.0,
                     ),
-                    const SizedBox(height: 12),
-                    _buildSimpleStatRow(
-                      'Avg Tip / Client',
-                      _buildAnimatedAvgTip(
-                        _selectedStaffDetail!['avgTipPerClient'],
-                      ),
+                    Divider(height: 24, color: Colors.grey.shade200),
+                    _buildDetailRow(
+                      'Check Income:',
+                      _selectedStaffDetail!['checkIncome'] ?? 0.0,
                     ),
 
-                    const SizedBox(height: 12),
+                    const Divider(height: 32, thickness: 2),
 
-                    if (_selectedStaffDetail!['services'] != null &&
-                        (_selectedStaffDetail!['services'] as List).isNotEmpty)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(left: 4.0), // Thụt trái bằng với padding trên
-                            child: const Text(
-                              'Services Performed',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                fontStyle: FontStyle.italic,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-
-                          Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey.shade300),
-                              borderRadius: BorderRadius.circular(12),
-                              color: Colors.white,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.grey.withOpacity(0.1),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            padding: const EdgeInsets.all(10),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(
-                                maxHeight: 220,
-                              ),
-                              child: Scrollbar(
-                                child: ListView.builder(
-                                  shrinkWrap: true,
-                                  physics: const AlwaysScrollableScrollPhysics(),
-                                  itemCount: (_selectedStaffDetail!['services'] as List).length,
-                                  itemBuilder: (context, index) {
-                                    final service = _selectedStaffDetail!['services'][index];
-                                    return Container(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(color: Colors.grey.shade200),
-                                        borderRadius: BorderRadius.circular(8),
-                                        color: Colors.grey.shade50,
-                                      ),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              '${service['serviceName']} (${service['count']}x) (${service['shareRate']}%)',
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                                color: Colors.black87,
-                                                height: 1.3,
-                                              ),
-                                              softWrap: true,
-                                              overflow: TextOverflow.visible,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            _formatCurrency(service['totalAmount']),
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.teal,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      )
-                    else
-                      _buildSimpleStatRow(
-                        'Services',
-                        const Text(
-                          'No services',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w400,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ),
-
-                    const SizedBox(height: 32),
-
-                    // Chart section
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    // Total
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'Daily Revenue (Last 7 Days)',
+                          'Total:',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                            color: Colors.green,
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          height: 250,
-                          child: _buildRevenueChart(),
+                        Text(
+                          _formatCurrency(_selectedStaffDetail!['total'] ?? 0.0),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
                         ),
                       ],
                     ),
+
+                    const SizedBox(height: 32),
+
+                    // Chart
+                    if (_selectedStaffDetail!['dailyRevenue'] != null &&
+                        (_selectedStaffDetail!['dailyRevenue'] as List)
+                            .isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Daily Revenue (Last 7 Days)',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            height: 250,
+                            child: _buildRevenueChart(),
+                          ),
+                        ],
+                      ),
 
                     const SizedBox(height: 80),
                   ],
@@ -1062,11 +1634,9 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
       if (amount > maxY) maxY = amount;
     }
 
-    // Tính toán maxY làm tròn lên và interval phù hợp
-    double niceMaxY = ((maxY * 1.1) / 100).ceil() * 100; // Làm tròn lên đến trăm gần nhất
-    double interval = 100; // Mốc 100
+    double niceMaxY = ((maxY * 1.1) / 100).ceil() * 100;
+    double interval = 100;
 
-    // Nếu giá trị nhỏ thì điều chỉnh interval
     if (niceMaxY <= 500) {
       interval = 50;
     }
@@ -1117,8 +1687,7 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
                   showTitles: true,
                   getTitlesWidget: (value, meta) {
                     final index = value.toInt();
-                    if (index < 0 || index >= data.length)
-                      return const Text('');
+                    if (index < 0 || index >= data.length) return const Text('');
                     return Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
@@ -1177,7 +1746,8 @@ class _StaffIncomeDetailScreenState extends State<StaffIncomeDetailScreen>
               ),
             ),
             barGroups: data.asMap().entries.map((entry) {
-              final amount = (entry.value['amount'] as double) * _animationController.value;
+              final amount =
+                  (entry.value['amount'] as double) * _animationController.value;
               return BarChartGroupData(
                 x: entry.key,
                 barRods: [

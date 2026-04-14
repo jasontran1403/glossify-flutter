@@ -3,6 +3,7 @@ import '../../utils/constant/staff_slot.dart';
 
 class Task {
   final int bookingId;
+  final bool markUnchange;
   final String fullName;
   final String customerAvt;
   final String? phoneNumber;
@@ -21,6 +22,7 @@ class Task {
   final String? paymentMethod;
   final double? cashDiscount;
   final String? reason;
+  final int? actualDurationMinutes;
 
   // ⭐ THÊM MỚI: Multiple staff support
   final List<int>? allStaffIds;
@@ -31,6 +33,7 @@ class Task {
 
   Task({
     required this.bookingId,
+    required this.markUnchange,
     required this.fullName,
     required this.customerAvt,
     this.phoneNumber,
@@ -52,6 +55,7 @@ class Task {
     this.cashDiscount,
     this.reason,
     this.isNewlyAdded = false, // ⭐ NEW: Default false
+    this.actualDurationMinutes
   });
 
   // ⭐ HELPER: Check có multiple staff không
@@ -185,6 +189,7 @@ class Task {
 
     return Task(
       bookingId: slot.bookingId,
+      markUnchange: slot.markUnchange,
       fullName: slot.fullName,
       customerAvt: slot.customerAvt,
       startTime: TimeOfDay(
@@ -221,5 +226,43 @@ class Task {
         'startTime: $startTime, endTime: $endTime, taskCount: $taskCount, '
         'status: $status, serviceItems: ${serviceItems?.length ?? 0}, '
         'isNewlyAdded: $isNewlyAdded}'; // ⭐ NEW: Add to toString
+  }
+
+  // ⭐ ADDED: Getters for PaymentDetailPanel compatibility
+  String get customerName => fullName;
+
+  double get totalFee {
+    if (cashDiscount != null) return cashDiscount!;
+
+    // Calculate from serviceItems
+    if (serviceItems != null && serviceItems!.isNotEmpty) {
+      return serviceItems!.fold(0.0, (sum, item) => sum + (item.price ?? 0.0));
+    }
+    return 0.0;
+  }
+
+  double get amountAfterDiscount {
+    if (totalAmount != null) return totalAmount!;
+
+    // Calculate from serviceItems
+    if (serviceItems != null && serviceItems!.isNotEmpty) {
+      double subtotal = serviceItems!.fold(0.0, (sum, item) => sum + (item.price ?? 0.0));
+      return subtotal - (amountDiscount ?? 0.0);
+    }
+    return 0.0;
+  }
+
+  List<String> get serviceNames {
+    if (serviceItems != null && serviceItems!.isNotEmpty) {
+      return serviceItems!.map((item) => item.name ?? 'Unknown').toList();
+    }
+    return ['Unknown Service'];
+  }
+
+  List<double> get servicePrices {
+    if (serviceItems != null && serviceItems!.isNotEmpty) {
+      return serviceItems!.map((item) => item.price ?? 0.0).toList();
+    }
+    return [0.0];
   }
 }

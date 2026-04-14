@@ -1,23 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:timezone/timezone.dart' as tz;
 import 'booking_state.dart';
 
 class BookingHeader extends StatelessWidget {
   final BookingState scheduleState;
   final bool showStaffSheet;
   final VoidCallback onToggleStaffSheet;
-  final VoidCallback onCloseShift; // ⭐ THÊM
+  final VoidCallback onCloseShift;
 
   const BookingHeader({
     Key? key,
     required this.scheduleState,
     required this.showStaffSheet,
     required this.onToggleStaffSheet,
-    required this.onCloseShift, // ⭐ THÊM
+    required this.onCloseShift,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final dateLabel = scheduleState.getFormattedDate();
+
+    // ⭐ Get Chicago time for display
+    final chicago = tz.getLocation('America/Chicago');
+    final chicagoTime = tz.TZDateTime.now(chicago);
+    final isDST = chicagoTime.timeZoneOffset.inHours == -5; // CDT (UTC-5) vs CST (UTC-6)
+    final tzAbbr = isDST ? 'CDT' : 'CST';
+    final timeLabel = '${chicagoTime.hour.toString().padLeft(2, '0')}:${chicagoTime.minute.toString().padLeft(2, '0')}:${chicagoTime.second.toString().padLeft(2, '0')} $tzAbbr';
 
     return Container(
       padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 16),
@@ -54,7 +62,7 @@ class BookingHeader extends StatelessWidget {
           ),
           const SizedBox(width: 8),
 
-          // Date display
+          // Date display with Chicago time
           Expanded(
             child: GestureDetector(
               onTap: scheduleState.isLoading ? null : () => scheduleState.selectDate(context),
@@ -72,13 +80,28 @@ class BookingHeader extends StatelessWidget {
                     children: [
                       Icon(Icons.calendar_today, color: Colors.grey[600], size: 18),
                       const SizedBox(width: 12),
-                      Text(
-                        dateLabel,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            dateLabel,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          // ⭐ Display Chicago time
+                          Text(
+                            timeLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

@@ -317,7 +317,6 @@ class _StaffTabState extends State<StaffTab> {
     ) ?? false;
   }
 
-
   Future<void> _fetchStaffData({required bool isRefresh}) async {
     if (isRefresh) {
       setState(() {
@@ -343,14 +342,21 @@ class _StaffTabState extends State<StaffTab> {
 
       if (!mounted) return;
 
+      // ✅ Filter out "Anyone" staff
+      final filteredData = (response.data ?? []).where((staff) {
+        final name = staff.fullName?.trim().toLowerCase() ?? '';
+        return name != 'anyone';
+      }).toList();
+
       setState(() {
         if (isRefresh) {
-          _staffData = response.data ?? [];
+          _staffData = filteredData;
         } else {
-          _staffData.addAll(response.data ?? []);
+          _staffData.addAll(filteredData);
         }
 
-        if ((response.data ?? []).length < _pageSize) {
+        // ✅ Check hasMore dựa trên filtered data
+        if (filteredData.length < _pageSize) {
           _hasMore = false;
         }
 
@@ -373,7 +379,6 @@ class _StaffTabState extends State<StaffTab> {
       }
     }
   }
-
   Future<void> _refreshData() async {
     if (_searchDebounce?.isActive ?? false) {
       _searchDebounce?.cancel();

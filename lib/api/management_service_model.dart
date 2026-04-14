@@ -8,6 +8,7 @@ class ManagementServiceDTO {
   final double cashPrice;
   final String avatar;
   final bool plus;
+  final int time;
   final ManagementCategoryDTO? category;
 
   ManagementServiceDTO({
@@ -18,6 +19,7 @@ class ManagementServiceDTO {
     required this.cashPrice,
     required this.avatar,
     required this.plus,
+    required this.time,
     this.category,
   });
 
@@ -30,6 +32,7 @@ class ManagementServiceDTO {
       cashPrice: (json['cashPrice'] as num?)?.toDouble() ?? 0.0,
       avatar: json['avatar'] ?? '',
       plus: json['plus'] ?? false,
+      time: (json['time'] as int?)?.toInt() ?? 15,
       category: json['category'] != null ? ManagementCategoryDTO.fromJson(json['category']) : null,
     );
   }
@@ -43,6 +46,7 @@ class ManagementServiceUpdateRequest {
   final String? avatar;
   final bool? plus;
   final int? categoryId;
+  final int? time;
 
   ManagementServiceUpdateRequest({
     this.name,
@@ -52,6 +56,7 @@ class ManagementServiceUpdateRequest {
     this.avatar,
     this.plus,
     this.categoryId,
+    this.time
   });
 
   Map<String, dynamic> toJson() {
@@ -63,6 +68,7 @@ class ManagementServiceUpdateRequest {
       if (avatar != null) 'avatar': avatar,
       if (plus != null) 'plus': plus,
       if (categoryId != null) 'categoryId': categoryId,
+      if (time != null) 'time': time,
     };
   }
 }

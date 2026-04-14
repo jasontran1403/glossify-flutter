@@ -3,8 +3,9 @@ import 'package:hair_sallon/utils/app_colors/app_colors.dart';
 import 'package:hair_sallon/utils/common_string/string.dart';
 import 'package:hair_sallon/utils/constant/constant.dart';
 import 'package:hair_sallon/utils/navigation/navigation_file.dart';
-import 'package:hair_sallon/view/sign_in/sign_in.dart';
+import 'package:hair_sallon/view/bottombar_screen/bottomscreen_view_user.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class GetStarted extends StatefulWidget {
   final int initialPage;
@@ -37,6 +38,16 @@ class _GetStartedState extends State<GetStarted> {
     super.dispose();
   }
 
+  // ✅ Save flag and navigate to BottomNavBarView
+  Future<void> _completeGetStarted() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hasSeenGetStarted', true);
+
+    if (mounted) {
+      Navigation.pushReplacement(context, const BottomNavBarView());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -53,13 +64,13 @@ class _GetStartedState extends State<GetStarted> {
                       controller: pageController,
                       children: List.generate(
                         AppStrings.onboardingTitles.length,
-                        (index) {
+                            (index) {
                           return SingleChildScrollView(
                             child: Column(
                               children: [
                                 SizedBox(
                                   height:
-                                      MediaQuery.of(context).size.height * 0.18,
+                                  MediaQuery.of(context).size.height * 0.18,
                                 ),
                                 Image.asset(
                                   AppStrings.onboardingImages[index],
@@ -110,26 +121,26 @@ class _GetStartedState extends State<GetStarted> {
                             }
                           },
                           child:
-                              currentPage == 0
-                                  ? const SizedBox(width: 35)
-                                  : Container(
-                                    padding: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: AppColors.primaryColor,
-                                        width: 2,
-                                      ),
-                                    ),
-                                    child: const CircleAvatar(
-                                      radius: 13,
-                                      backgroundColor: Colors.white,
-                                      child: Icon(
-                                        Icons.arrow_back,
-                                        color: AppColors.primaryColor,
-                                      ),
-                                    ),
-                                  ),
+                          currentPage == 0
+                              ? const SizedBox(width: 35)
+                              : Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.primaryColor,
+                                width: 2,
+                              ),
+                            ),
+                            child: const CircleAvatar(
+                              radius: 13,
+                              backgroundColor: Colors.white,
+                              child: Icon(
+                                Icons.arrow_back,
+                                color: AppColors.primaryColor,
+                              ),
+                            ),
+                          ),
                         ),
 
                         // Dot indicator
@@ -141,7 +152,6 @@ class _GetStartedState extends State<GetStarted> {
                             dotWidth: 12,
                             spacing: 8,
                             activeDotColor: AppColors.primaryColor,
-                            // dotColor: AppColors.primaryColor.withOpacity(0.3),
                             dotColor: AppColors.primaryColor.withAlpha(76),
                           ),
                           onDotClicked: (index) {
@@ -157,10 +167,8 @@ class _GetStartedState extends State<GetStarted> {
                         GestureDetector(
                           onTap: () {
                             if (currentPage == 2) {
-                              Navigation.pushReplacement(
-                                context,
-                                const SignInScreen(),
-                              );
+                              // ✅ Trang cuối → Lưu flag và chuyển BottomNavBarView
+                              _completeGetStarted();
                             } else {
                               pageController.nextPage(
                                 duration: const Duration(milliseconds: 300),
@@ -198,7 +206,8 @@ class _GetStartedState extends State<GetStarted> {
                 right: 20,
                 child: GestureDetector(
                   onTap: () {
-                    Navigation.pushReplacement(context, const SignInScreen());
+                    // ✅ Skip → Lưu flag và chuyển BottomNavBarView
+                    _completeGetStarted();
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -206,12 +215,11 @@ class _GetStartedState extends State<GetStarted> {
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      // color: AppColors.primaryColor.withOpacity(0.1),
                       color: AppColors.primaryColor.withAlpha(25),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      AppStrings.skip,
+                      'Skip',
                       style: TextStyle(
                         color: AppColors.primaryColor,
                         fontWeight: FontWeight.w600,

@@ -5,6 +5,7 @@ class QuickServiceModel {
   final String description;
   final double price;
   final String categoryName;
+  final int time;
   final List<QuickStaffModel> staffList;
 
   QuickServiceModel({
@@ -14,6 +15,7 @@ class QuickServiceModel {
     required this.description,
     required this.price,
     required this.categoryName,
+    required this.time,
     required this.staffList,
   });
 
@@ -26,6 +28,7 @@ class QuickServiceModel {
       description: json['serviceDescription'] ?? json['description'] ?? '',
       price: (json['servicePrice'] ?? json['price'] ?? 0.0).toDouble(),
       categoryName: json['cateName'] ?? json['categoryName'] ?? '',
+      time: json['time'] ?? 0,
       staffList: staffJson.map((s) => QuickStaffModel.fromJson(s)).toList(),
     );
   }

@@ -3,7 +3,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:hair_sallon/utils/app_colors/app_colors.dart';
 import 'package:hair_sallon/utils/local_images/local_images.dart';
 import 'package:hair_sallon/utils/navigation/navigation_file.dart';
-import 'package:hair_sallon/view/saloncardpage/salon_card_page.dart';
 import 'package:hair_sallon/widgets/common_appbar/common_appbar.dart';
 
 class TopRatedSalonsScreen extends StatelessWidget {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:timezone/timezone.dart' as tz;
 import '../../../api/api_service.dart';
 import '../../../api/staff_schedule_model.dart';
 import '../../home_screen/detail_stylist.dart';
@@ -22,7 +23,7 @@ class BookingState {
   final ScrollController staffHeaderScrollController = ScrollController();
 
   // State variables
-  DateTime selectedDate = DateTime.now();
+  DateTime selectedDate = _getChicagoToday();
   List<StaffSchedule> staffSchedules = [];
   Map<int, List<Task>> eventsByStaffId = {};
   bool isLoading = false;
@@ -39,6 +40,13 @@ class BookingState {
   int remainingSeconds = 0;
 
   final DateFormat dateFormat = DateFormat('MMMM EEE dd, yyyy');
+
+  // ⭐ Helper: Get Chicago today
+  static DateTime _getChicagoToday() {
+    final chicago = tz.getLocation('America/Chicago');
+    final now = tz.TZDateTime.now(chicago);
+    return DateTime(now.year, now.month, now.day);
+  }
 
   // ⭐ THÊM GETTER TASKS - Flatten tất cả tasks từ eventsByStaffId
   List<Task> get tasks {
@@ -83,10 +91,29 @@ class BookingState {
   // ⭐ FIXED: Sử dụng cùng API với fetchSchedule nhưng merge thông minh
   Future<void> fetchScheduleIncremental() async {
     try {
-      // ⭐ Lấy danh sách booking IDs hiện tại TRƯỚC KHI GỌI API
-      final currentBookingIds = tasks.map((t) => t.bookingId).toSet();
+      // ⭐ DEFINE STATUS GROUPS FOR TABS
+      final activeStatuses = {'BOOKED', 'NEW_BOOKED', 'CHECKED_IN', 'IN_PROGRESS', 'REQUEST_MORE_STAFF'};
+      final pendingStatuses = {'WAITING_PAYMENT'};
+      final doneStatuses = {'PAID'};
+      final canceledStatuses = {'CANCELED'};
 
-      // ⭐ GỌI API GIỐNG fetchSchedule()
+      // Helper function to get tab group
+      String? getTabGroup(String status) {
+        if (activeStatuses.contains(status)) return 'ACTIVE';
+        if (pendingStatuses.contains(status)) return 'PENDING';
+        if (doneStatuses.contains(status)) return 'DONE';
+        if (canceledStatuses.contains(status)) return 'CANCELED';
+        return null;
+      }
+
+      // ⭐ LƯU CẢ BOOKING IDS VÀ STATUS MAP
+      final currentBookingIds = tasks.map((t) => t.bookingId).toSet();
+      final Map<int, String> currentBookingStatuses = {};
+
+      for (var task in tasks) {
+        currentBookingStatuses[task.bookingId] = task.status;
+      }
+
       final data = await ApiService.getAllStaffSchedule(
         storeId: storeId,
         type: 1,
@@ -94,90 +121,184 @@ class BookingState {
       );
 
       if (data.isEmpty) {
-        // Không có dữ liệu mới
         return;
       }
 
-      // ⭐ Parse new data và tìm booking mới
+      // ⭐ ANALYZE: New bookings, tab changed, status changed (same tab), removed
       List<Task> newTasks = [];
-      Map<int, List<Task>> newEventsByStaff = {};
+      List<Task> tabChangedTasks = []; // ⭐ Chuyển TAB → cần highlight
+      List<Task> sameTabStatusChangedTasks = []; // ⭐ Cùng TAB → không highlight
+      Set<int> apiBookingIds = {};
 
       for (var schedule in data) {
         final staffName = schedule.fullName ?? 'Staff ${schedule.staffId}';
         final staffId = schedule.staffId;
 
-        List<Task> newStaffTasks = [];
-
         for (var slot in schedule.slots) {
           final bookingId = slot.bookingId;
+          final newStatus = slot.status;
 
-          // ⭐ KIỂM TRA: Nếu booking đã tồn tại, BỎ QUA
-          if (currentBookingIds.contains(bookingId)) {
+          apiBookingIds.add(bookingId);
+
+          // ⭐ CASE 1: BOOKING MỚI (chưa có trong memory)
+          if (!currentBookingIds.contains(bookingId)) {
+            final task = Task.fromStaffSlot(
+              slot,
+              staffName,
+              staffId: staffId,
+              isNew: true, // ⭐ ĐÁNH DẤU MỚI
+            );
+            newTasks.add(task);
             continue;
           }
 
-          // ⭐ BOOKING MỚI: Đánh dấu isNew = true
-          final task = Task.fromStaffSlot(
-            slot,
-            staffName,
-            staffId: staffId,
-            isNew: true, // ⭐ ĐÁNH DẤU LÀ BOOKING MỚI
-          );
+          // ⭐ CASE 2: STATUS THAY ĐỔI
+          final oldStatus = currentBookingStatuses[bookingId];
+          if (oldStatus != newStatus) {
+            final oldTabGroup = getTabGroup(oldStatus!);
+            final newTabGroup = getTabGroup(newStatus);
 
-          newTasks.add(task);
-          newStaffTasks.add(task);
-        }
-
-        // Nếu có task mới cho staff này
-        if (newStaffTasks.isNotEmpty) {
-          newEventsByStaff[staffId] = newStaffTasks;
+            // ⭐ CHECK: Có chuyển TAB không?
+            if (oldTabGroup != newTabGroup) {
+              final task = Task.fromStaffSlot(
+                slot,
+                staffName,
+                staffId: staffId,
+                isNew: true, // ⭐ ĐÁNH DẤU ĐỂ HIGHLIGHT
+              );
+              tabChangedTasks.add(task);
+            } else {
+              final task = Task.fromStaffSlot(
+                slot,
+                staffName,
+                staffId: staffId,
+                isNew: false, // ⭐ KHÔNG HIGHLIGHT
+              );
+              sameTabStatusChangedTasks.add(task);
+            }
+            continue;
+          }
         }
       }
 
-      // ⭐ CHỈ THÊM CÁC BOOKING MỚI VÀO LIST HIỆN TẠI
-      if (newTasks.isNotEmpty) {
-        print('✅ Found ${newTasks.length} new booking(s)');
+      // ⭐ DETECT REMOVED BOOKINGS (có trong memory nhưng không có trong API)
+      final removedBookingIds = currentBookingIds.difference(apiBookingIds);
 
-        // Merge events by staff
+      // ⭐ CẬP NHẬT MEMORY
+      bool hasChanges = false;
+
+      // ⭐ XÓA BOOKINGS KHÔNG CÒN TRONG API
+      if (removedBookingIds.isNotEmpty) {
+        eventsByStaffId.forEach((staffId, taskList) {
+          taskList.removeWhere((task) {
+            if (removedBookingIds.contains(task.bookingId)) {
+              return true;
+            }
+            return false;
+          });
+        });
+        hasChanges = true;
+      }
+
+      // ⭐ UPDATE TAB-CHANGED BOOKINGS (with highlight)
+      if (tabChangedTasks.isNotEmpty) {
+        for (var updatedTask in tabChangedTasks) {
+          // Tìm và xóa booking cũ
+          eventsByStaffId.forEach((staffId, taskList) {
+            taskList.removeWhere((task) {
+              if (task.bookingId == updatedTask.bookingId) {
+                return true;
+              }
+              return false;
+            });
+          });
+
+          // Thêm booking mới với status mới
+          final staffId = updatedTask.staffId ?? 0;
+          if (eventsByStaffId.containsKey(staffId)) {
+            eventsByStaffId[staffId]!.add(updatedTask);
+          } else {
+            eventsByStaffId[staffId] = [updatedTask];
+          }
+        }
+        hasChanges = true;
+      }
+
+      // ⭐ UPDATE SAME-TAB STATUS CHANGED BOOKINGS (without highlight)
+      if (sameTabStatusChangedTasks.isNotEmpty) {
+        for (var updatedTask in sameTabStatusChangedTasks) {
+          // Tìm và xóa booking cũ
+          eventsByStaffId.forEach((staffId, taskList) {
+            taskList.removeWhere((task) {
+              if (task.bookingId == updatedTask.bookingId) {
+                return true;
+              }
+              return false;
+            });
+          });
+
+          // Thêm booking mới với status mới
+          final staffId = updatedTask.staffId ?? 0;
+          if (eventsByStaffId.containsKey(staffId)) {
+            eventsByStaffId[staffId]!.add(updatedTask);
+          } else {
+            eventsByStaffId[staffId] = [updatedTask];
+          }
+        }
+        hasChanges = true;
+      }
+
+      // ⭐ ADD NEW BOOKINGS
+      if (newTasks.isNotEmpty) {
+        // Group by staff
+        Map<int, List<Task>> newEventsByStaff = {};
+        for (var task in newTasks) {
+          final staffId = task.staffId ?? 0;
+          if (!newEventsByStaff.containsKey(staffId)) {
+            newEventsByStaff[staffId] = [];
+          }
+          newEventsByStaff[staffId]!.add(task);
+        }
+
+        // Merge
         newEventsByStaff.forEach((staffId, newStaffTasks) {
           if (eventsByStaffId.containsKey(staffId)) {
-            // Staff đã có booking → thêm vào list hiện tại
             eventsByStaffId[staffId]!.addAll(newStaffTasks);
           } else {
-            // Staff chưa có booking → tạo list mới
             eventsByStaffId[staffId] = newStaffTasks;
           }
         });
 
-        // ⭐ CẬP NHẬT staffSchedules nếu có staff mới
+        // Update staffSchedules nếu cần
         for (var schedule in data) {
           final staffId = schedule.staffId;
           final exists = staffSchedules.any((s) => s.staffId == staffId);
-
           if (!exists && newEventsByStaff.containsKey(staffId)) {
-            // Thêm staff mới vào list
             staffSchedules.add(schedule);
           }
         }
+        hasChanges = true;
+      }
 
-        // Trigger UI update
+      if (hasChanges) {
         onStateChanged();
 
-        // ⭐ TỰ ĐỘNG XÓA HIGHLIGHT SAU 30 GIÂY
-        Future.delayed(const Duration(seconds: 30), () {
-          for (var task in newTasks) {
-            task.isNewlyAdded = false;
-          }
-          onStateChanged();
-        });
-      } else {
-        print('ℹ️ No new bookings found');
+        final highlightedTasks = [...newTasks, ...tabChangedTasks];
+        if (highlightedTasks.isNotEmpty) {
+          Future.delayed(const Duration(seconds: 30), () {
+            for (var task in highlightedTasks) {
+              task.isNewlyAdded = false;
+            }
+            onStateChanged();
+          });
+        }
       }
     } catch (e) {
-      print('❌ Error fetching incremental schedule: $e');
+      print('\n❌ ERROR in fetchScheduleIncremental: $e');
+      print('Stack trace: ${StackTrace.current}');
     }
-  }
 
+  }
   void _onMainScroll() {
     if (_isSyncing) return;
   }
@@ -223,7 +344,6 @@ class BookingState {
 
         for (var schedule in data) {
           List<Task> staffEvents = [];
-
           final staffName = schedule.fullName ?? 'Staff ${schedule.staffId}';
           final staffId = schedule.staffId;
 
@@ -297,29 +417,42 @@ class BookingState {
 
   void nextDay() => goToNextDay();
 
+  // ⭐ Previous day with Chicago timezone constraint
   void goToPreviousDay() {
-    final today = DateTime.now();
-    if (selectedDate.isAfter(today)) {
+    final chicago = tz.getLocation('America/Chicago');
+    final today = tz.TZDateTime.now(chicago);
+    final todayDate = DateTime(today.year, today.month, today.day);
+
+    if (selectedDate.isAfter(todayDate)) {
       selectedDate = selectedDate.subtract(const Duration(days: 1));
       fetchSchedule();
     }
   }
 
+  // ⭐ Next day with Chicago timezone constraint
   void goToNextDay() {
-    final maxDate = DateTime.now().add(const Duration(days: 14));
+    final chicago = tz.getLocation('America/Chicago');
+    final today = tz.TZDateTime.now(chicago);
+    final maxDate = DateTime(today.year, today.month, today.day)
+        .add(const Duration(days: 14));
+
     if (selectedDate.isBefore(maxDate)) {
       selectedDate = selectedDate.add(const Duration(days: 1));
       fetchSchedule();
     }
   }
 
+  // ⭐ Date picker with Chicago timezone constraints
   Future<void> selectDate(BuildContext context) async {
-    final today = DateTime.now();
-    final maxDate = today.add(const Duration(days: 14));
+    final chicago = tz.getLocation('America/Chicago');
+    final today = tz.TZDateTime.now(chicago);
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final maxDate = todayDate.add(const Duration(days: 14));
+
     final picked = await showDatePicker(
       context: context,
       initialDate: selectedDate,
-      firstDate: today,
+      firstDate: todayDate,
       lastDate: maxDate,
       builder: (context, child) {
         return Theme(
@@ -339,10 +472,14 @@ class BookingState {
     }
   }
 
+  // ⭐ Go to today (Chicago timezone)
   void goToToday() {
-    final today = DateTime.now();
-    if (!selectedDate.isAtSameMomentAs(today)) {
-      selectedDate = today;
+    final chicago = tz.getLocation('America/Chicago');
+    final today = tz.TZDateTime.now(chicago);
+    final todayDate = DateTime(today.year, today.month, today.day);
+
+    if (!selectedDate.isAtSameMomentAs(todayDate)) {
+      selectedDate = todayDate;
       fetchSchedule();
     }
   }

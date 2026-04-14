@@ -130,8 +130,6 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> wit
   void _initializeAfterStoreId() {
     if (_storeId == null || _isInitialized) return;
 
-    print('✅ Initializing with storeId: $_storeId');
-
     // ⭐ INIT TAB CONTROLLER
     _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
@@ -173,12 +171,39 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> wit
 
 
   void _startAutoRefresh() {
+    _autoRefreshTimer?.cancel();
+
     _autoRefreshTimer = Timer.periodic(_autoRefreshInterval, (timer) {
-      if (mounted && _currentTabIndex == 0) { // ⭐ CHỈ AUTO-REFRESH KHI Ở TAB "ACTIVE"
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      // ⭐ CHỈ AUTO-REFRESH KHI Ở TAB ACTIVE (0), PENDING (1), hoặc DONE (2)
+      if (_currentTabIndex == 0 || _currentTabIndex == 1 || _currentTabIndex == 2) {
+        // ⭐ fetchScheduleIncremental() sẽ tự động:
+        // - Detect bookings mới → fade IN
+        // - Detect bookings đã chuyển trạng thái → fade OUT
         scheduleState.fetchScheduleIncremental();
+
+        // ⭐ Log current bookings for debugging
+        final activeCount = scheduleState.tasks.where((t) =>
+        t.status == 'BOOKED' || t.status == 'NEW_BOOKED' ||
+            t.status == 'CHECKED_IN' || t.status == 'IN_PROGRESS' ||
+            t.status == 'REQUEST_MORE_STAFF'
+        ).length;
+
+        final pendingCount = scheduleState.tasks.where((t) =>
+        t.status == 'WAITING_PAYMENT'
+        ).length;
+
+        final doneCount = scheduleState.tasks.where((t) =>
+        t.status == 'PAID'
+        ).length;
       }
     });
   }
+
 
   // ⭐ THÊM METHOD MỚI: Stop auto-refresh
   void _stopAutoRefresh() {
@@ -1130,8 +1155,6 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> wit
   List<Task> _getFilteredTasksForTab(int tabIndex) {
     final allTasks = scheduleState.tasks;
 
-
-
     switch (tabIndex) {
       case 0: // Active
         return allTasks.where((task) =>
@@ -1231,15 +1254,18 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> wit
     );
   }
 
-  // ⭐ Dialog chọn Replace hoặc Add - WITH INCREASED WIDTH
+  // ⭐ Dialog chọn Replace hoặc Add - WITH markUnchange CHECK
   void _showReplaceOrAddDialog(StaffSchedule newStaff, Task task) {
+    // ⭐ CHECK: Nếu markUnchange = true → chỉ cho phép Add
+    final bool canReplace = task.markUnchange != true;
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Container(
-          width: MediaQuery.of(context).size.width * 0.9, // ⭐ 90% width
-          constraints: const BoxConstraints(maxWidth: 700), // ⭐ Max 700px
+          width: MediaQuery.of(context).size.width * 0.9,
+          constraints: const BoxConstraints(maxWidth: 700),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1264,11 +1290,37 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> wit
                       child: const Icon(Icons.people_alt, color: Colors.blue, size: 24),
                     ),
                     const SizedBox(width: 12),
-                    const Text(
-                      'Staff Assignment',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Staff Assignment',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          // ⭐ SHOW WARNING IF markUnchange = true
+                          if (!canReplace)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.lock, size: 14, color: Colors.orange[700]),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Replace locked - Add only',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.orange[700],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],
@@ -1313,22 +1365,50 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> wit
                       ),
                       const SizedBox(height: 12),
 
-                      // Replace staff options
-                      Text(
-                        'Replace existing staff:',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
+                      // ⭐ CONDITIONAL: Replace options ONLY if canReplace
+                      if (canReplace) ...[
+                        Text(
+                          'Replace existing staff:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
+                        const SizedBox(height: 8),
+                        _buildReplaceStaffOption(task, newStaff),
+                        const SizedBox(height: 16),
+                      ] else ...[
+                        // ⭐ SHOW WARNING BOX
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange[300]!, width: 2),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.lock, color: Colors.orange[700], size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'This booking cannot be replaced any staff.\nYou can only add new staff.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.orange[900],
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
 
-                      _buildReplaceStaffOption(task, newStaff),
-
-                      const SizedBox(height: 16),
-
-                      // Add button
+                      // Add button (always available)
                       _buildActionButton(
                         icon: Icons.add,
                         label: 'Add ${newStaff.fullName}',
@@ -1369,6 +1449,7 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> wit
   }
 
   // ⭐ Build replace staff options
+// ⭐ Build replace staff options - WITH LOCK CHECK
   Widget _buildReplaceStaffOption(Task task, StaffSchedule newStaff) {
     final uniqueStaffNames = task.getUniqueStaffNames();
 
@@ -1386,66 +1467,80 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> wit
       );
     }
 
+    // ⭐ CHECK: markUnchange
+    final bool canReplace = task.markUnchange != true;
+
     return Column(
       children: uniqueStaffNames.map((staffName) {
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
-          child: InkWell(
-            onTap: () {
-              Navigator.pop(context);
-              // Find staffId from task
-              int? staffIdToReplace;
-              if (task.staffName == staffName && task.staffId != null) {
-                staffIdToReplace = task.staffId!;
-              } else if (task.serviceItems != null) {
-                for (var service in task.serviceItems!) {
-                  if (service.staffName == staffName && service.staffId != null) {
-                    staffIdToReplace = service.staffId!;
-                    break;
+          child: Opacity(
+            opacity: canReplace ? 1.0 : 0.4, // ⭐ Dim if locked
+            child: InkWell(
+              onTap: canReplace
+                  ? () {
+                Navigator.pop(context);
+                // Find staffId from task
+                int? staffIdToReplace;
+                if (task.staffName == staffName && task.staffId != null) {
+                  staffIdToReplace = task.staffId!;
+                } else if (task.serviceItems != null) {
+                  for (var service in task.serviceItems!) {
+                    if (service.staffName == staffName && service.staffId != null) {
+                      staffIdToReplace = service.staffId!;
+                      break;
+                    }
                   }
                 }
-              }
 
-              if (staffIdToReplace != null) {
-                _handleReplaceStaff(staffIdToReplace, staffName, newStaff, task);
+                if (staffIdToReplace != null) {
+                  _handleReplaceStaff(staffIdToReplace, staffName, newStaff, task);
+                }
               }
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange[200]!),
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: Colors.orange,
-                    child: Text(
-                      staffName.substring(0, 1).toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                  : null, // ⭐ Disable tap if locked
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: canReplace ? Colors.orange[50] : Colors.grey[200],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: canReplace ? Colors.orange[200]! : Colors.grey[400]!,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: canReplace ? Colors.orange : Colors.grey,
+                      child: Text(
+                        staffName.substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      staffName,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        staffName,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: canReplace ? Colors.black87 : Colors.grey[600],
+                        ),
                       ),
                     ),
-                  ),
-                  Icon(Icons.swap_horiz, color: Colors.orange[700], size: 20),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
-                ],
+                    if (canReplace) ...[
+                      Icon(Icons.swap_horiz, color: Colors.orange[700], size: 20),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                    ] else
+                      Icon(Icons.lock, color: Colors.grey[600], size: 18),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1454,7 +1549,7 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> wit
     );
   }
 
-  // ⭐ Handle replace staff (simplified - replace all services)
+  // ⭐ Handle replace staff - WITH DOUBLE CHECK
   void _handleReplaceStaff(
       int oldStaffId,
       String oldStaffName,
@@ -1462,6 +1557,31 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> wit
       Task task,
       ) async {
     if (!mounted) return;
+
+    // ⭐ CRITICAL CHECK: Không cho phép replace nếu markUnchange = true
+    if (task.markUnchange == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.lock, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'This booking cannot be replaced any staff',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+      return;
+    }
 
     // Show confirm dialog
     final confirmed = await showDialog<bool>(
@@ -1562,7 +1682,6 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> wit
     );
 
     if (confirmed == true) {
-      // ⭐ Truyền oldStaffId vào API
       _performStaffReassignmentWithOldStaff(newStaff, task, oldStaffId);
     }
   }

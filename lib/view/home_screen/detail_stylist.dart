@@ -8,6 +8,7 @@ import 'package:hair_sallon/view/calendar_screen/todo_calendar_screen.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../../api/api_service.dart';
+import '../../utils/auth_helper.dart';
 
 class StylistDetailScreen extends StatefulWidget {
   final int staffId;
@@ -86,7 +87,13 @@ class _StylistDetailScreenState extends State<StylistDetailScreen> with TickerPr
     super.dispose();
   }
 
-  void _addToCart(ServiceModel service) {
+  void _addToCart(ServiceModel service) async {
+    // ✅ Check if user is logged in before proceeding to booking
+    final canProceed = await AuthHelper.requireLogin(context);
+    if (!canProceed || !mounted) {
+      return;
+    }
+
     bool serviceExists = cartItems.any((item) => item.id == service.id); // This is fine since both are int
 
     if (!serviceExists) {
@@ -100,7 +107,13 @@ class _StylistDetailScreenState extends State<StylistDetailScreen> with TickerPr
     }
   }
 
-  void _showCartModal() {
+  void _showCartModal() async {
+    // ✅ Check if user is logged in before proceeding to booking
+    final canProceed = await AuthHelper.requireLogin(context);
+    if (!canProceed || !mounted) {
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -167,9 +180,10 @@ class _StylistDetailScreenState extends State<StylistDetailScreen> with TickerPr
   void _navigateToBookingScreen() {
     if (cartItems.isEmpty) return;
 
-    // Lấy danh sách serviceId và serviceName từ cartItems
+    // Lấy danh sách serviceId, serviceName và serviceTimes từ cartItems
     List<int> serviceIds = cartItems.map((service) => service.id).toList();
     List<String> serviceNames = cartItems.map((service) => service.name).toList();
+    List<int> serviceTimes = cartItems.map((service) => service.time).toList();
 
     Navigator.push(
       context,
@@ -178,9 +192,10 @@ class _StylistDetailScreenState extends State<StylistDetailScreen> with TickerPr
             TodoCalendarScreen(
               staffId: widget.staffId,
               staffName: stylist?.fullName ?? 'Stylist',
-              serviceIds: serviceIds, // Thay đổi từ serviceId thành serviceIds (list)
-              serviceNames: serviceNames, // Thay đổi từ serviceName thành serviceNames (list)
-              storeId: widget.storeId, // Thay bằng storeId thực tế nếu có
+              serviceIds: serviceIds,
+              serviceNames: serviceNames,
+              serviceTimes: serviceTimes,
+              storeId: widget.storeId,
             ),
       ),
     );
@@ -1100,6 +1115,7 @@ class ServiceModel {
   final double price;
   final String avatar;
   final bool plus;
+  final int time;
 
   ServiceModel({
     required this.id,
@@ -1107,7 +1123,8 @@ class ServiceModel {
     required this.description,
     required this.price,
     required this.avatar,
-    required this.plus
+    required this.plus,
+    required this.time
   });
 
   factory ServiceModel.fromJson(Map<String, dynamic> json) {
@@ -1117,7 +1134,8 @@ class ServiceModel {
         description: json['description'],
         price: json['price']?.toDouble() ?? 0.0,
         avatar: json['avatar'] ?? '',
-        plus: json['plus']
+        plus: json['plus'],
+        time: json['time']?.toInt() ?? 0
     );
   }
 }

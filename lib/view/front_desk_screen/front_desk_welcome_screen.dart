@@ -69,11 +69,11 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
   bool _showCryptoQR = false;
   String _cryptoWalletAddress = '';
 
-  // ⭐ GIFT CARD STATE
+  // GIFT CARD STATE
   List<Map<String, dynamic>> _scannedGiftCards = [];
   double _giftCardTotalAmount = 0.0;
 
-  // ⭐ TIP DEBOUNCE TIMER (FIX #1)
+  // TIP DEBOUNCE TIMER (FIX #1)
   Timer? _tipDebounceTimer;
 
   // ===== TOPUP STATE =====
@@ -96,6 +96,8 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
     4: Icons.currency_bitcoin,
     5: Icons.devices_other
   };
+
+  int? _storeId; // NEW: Store storeId
 
   @override
   void initState() {
@@ -144,6 +146,17 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
     _initVideo();
     _initWebSocket();
     _startStatusUpdateTimer();
+    _fetchStoreId(); // NEW: Fetch storeId once
+  }
+
+  Future<void> _fetchStoreId() async {
+    try {
+      _storeId = await ApiService.getStoreId();
+      print('Store ID fetched: $_storeId'); // Optional log
+    } catch (e) {
+      print('Error fetching storeId: $e');
+      // Optionally set default or handle error
+    }
   }
 
   void _startStatusUpdateTimer() {
@@ -188,19 +201,19 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
         }
         _handleWebSocketMessage(message);
       }, onError: (error) {
-        print('❌ FrontDeskWelcomeScreen: WebSocket error: $error');
+        print('FrontDeskWelcomeScreen: WebSocket error: $error');
         _handleWebSocketDisconnection();
       }, onDone: () {
         _handleWebSocketDisconnection();
       });
 
-      // ⭐ Send first PING immediately (no await)
+      // Send first PING immediately (no await)
       _sendPing();
 
       // Then start timer
       _startPingTimer();
     } catch (error) {
-      print('❌ FrontDeskWelcomeScreen: Failed to connect: $error');
+      print('FrontDeskWelcomeScreen: Failed to connect: $error');
       _handleWebSocketDisconnection();
     }
   }
@@ -235,7 +248,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
         'deviceName': deviceInfo['deviceName'],
         'platform': deviceInfo['platform'],
         'version': deviceInfo['version'],
-        'fingerprint': deviceInfo['fingerprint'],  // ⭐ NEW
+        'fingerprint': deviceInfo['fingerprint'],  // NEW
       },
     };
 
@@ -257,7 +270,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
     String deviceName = "Unknown Device";
     String platform = Platform.operatingSystem;
     String version = "Unknown";
-    String fingerprint = "unknown";  // ⭐ NEW
+    String fingerprint = "unknown";  // NEW
 
     try {
       if (Platform.isAndroid) {
@@ -266,7 +279,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
         platform = "Android";
         version = androidInfo.version.release;
 
-        // ⭐ Generate fingerprint from unique device identifiers
+        // Generate fingerprint from unique device identifiers
         fingerprint = _generateFingerprint([
           androidInfo.id,                    // Android ID (unique per device)
           androidInfo.model,                 // Device model
@@ -281,7 +294,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
         platform = "iOS";
         version = iosInfo.systemVersion;
 
-        // ⭐ Generate fingerprint from unique device identifiers
+        // Generate fingerprint from unique device identifiers
         fingerprint = _generateFingerprint([
           iosInfo.identifierForVendor ?? "",  // Unique ID for vendor
           iosInfo.model,                      // Device model
@@ -291,14 +304,14 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
         ]);
       }
     } catch (e) {
-      print("⚠️ Failed to get device info: $e");
+      print("Failed to get device info: $e");
     }
 
     return {
       "deviceName": deviceName,
       "platform": platform,
       "version": version,
-      "fingerprint": fingerprint,  // ⭐ NEW
+      "fingerprint": fingerprint,  // NEW
     };
   }
 
@@ -326,7 +339,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
         _waitingForPong = false;
         _pongTimer?.cancel();
 
-        // ⭐ Reset reconnect counter
+        // Reset reconnect counter
         if (_reconnectAttempts > 0) {
           _reconnectAttempts = 0;
         }
@@ -364,7 +377,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
   void _handleWebSocketMessage(Map<String, dynamic> message) {
     final type = message['type'] as String?;
 
-    // ⭐ CRITICAL: Handle PONG FIRST
+    // CRITICAL: Handle PONG FIRST
     if (type == 'PONG') {
       _handlePong(message);
       return;
@@ -434,7 +447,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
         break;
 
       default:
-        print('❓ Unknown WebSocket message type: $type');
+        print('Unknown WebSocket message type: $type');
     }
   }
 
@@ -477,7 +490,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
     _tipController.dispose();
     _paymentAnimationController.dispose();
     _topupAnimationController.dispose();
-    _tipDebounceTimer?.cancel(); // ⭐ FIX #1: Cancel debounce timer
+    _tipDebounceTimer?.cancel(); // FIX #1: Cancel debounce timer
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
   }
@@ -504,7 +517,20 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
       setState(() => _isNavigating = true);
     }
 
+    // NEW: No need for loading dialog since storeId is pre-fetched
+
     try {
+      // Use pre-fetched storeId
+      final storeId = _storeId;
+      if (storeId == null) {
+        // Fallback fetch if not available (unlikely)
+        await _fetchStoreId();
+        if (_storeId == null) {
+          throw Exception('Failed to get store ID');
+        }
+      }
+
+      // Show phone verification dialog
       final result = await showDialog<Map<String, dynamic>>(
         context: context,
         barrierDismissible: false,
@@ -522,13 +548,14 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
 
       final int userId = result['userId'];
 
+      // Navigate with dynamic storeId
       await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => ScheduleCalendarScreen(
             serviceIds: [1, 2, 3],
             serviceNames: ['Test1', 'Test2', 'Test3'],
-            storeId: 2,
+            storeId: storeId!, // Dynamic
             userId: userId,
           ),
         ),
@@ -538,8 +565,17 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Error: $e'),
+                ),
+              ],
+            ),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
         setState(() => _isNavigating = false);
@@ -564,7 +600,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
     final serviceCount = serviceItems?.length ?? 0;
     final cashDiscount = _selectedPaymentMethod == 1 ? (fee * serviceCount) : 0.0;
 
-    // ⭐ FIX: Calculate what we still need to scan
+    // FIX: Calculate what we still need to scan
     final totalNeeded = amountAfterDiscount - cashDiscount + _tipAmount;
     final shortage = totalNeeded - _giftCardTotalAmount;
 
@@ -598,7 +634,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
     }
   }
 
-  // ⭐ FIX #2: Allow scanning same card multiple times if balance remains
+  // FIX #2: Allow scanning same card multiple times if balance remains
   void _handleGiftCardScanResult(Map<String, dynamic> result) {
     final String code = result['code'];
     final double deductAmount = result['deductAmount'];
@@ -610,7 +646,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
     );
 
     if (existingCardIndex != -1) {
-      // ⭐ Card already scanned - check if it has remaining balance
+      // Card already scanned - check if it has remaining balance
       final existingCard = _scannedGiftCards[existingCardIndex];
       final currentUsed = (existingCard['usedAmount'] as num).toDouble();
       final currentBalance = (existingCard['balance'] as num).toDouble();
@@ -628,7 +664,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
         return;
       }
 
-      // ⭐ Has remaining balance - update the card by adding more deduction
+      // Has remaining balance - update the card by adding more deduction
       setState(() {
         _scannedGiftCards[existingCardIndex] = {
           'code': code,
@@ -650,7 +686,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
       return;
     }
 
-    // ⭐ New card - add it normally
+    // New card - add it normally
     setState(() {
       _scannedGiftCards.add({
         'code': code,
@@ -691,7 +727,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
     _giftCardTotalAmount = total;
   }
 
-  // ⭐ FIX #1: Add debounce to prevent popup spam
+  // FIX #1: Add debounce to prevent popup spam
   void _handleTipChange(double newTipAmount) {
     setState(() {
       _tipAmount = newTipAmount;
@@ -707,7 +743,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
     }
   }
 
-// ⭐ NEW: Automatically adjust gift cards when tips change
+// NEW: Automatically adjust gift cards when tips change
   void _adjustGiftCardsForTipChange() {
     if (_currentBooking == null || _scannedGiftCards.isEmpty) return;
 
@@ -724,17 +760,17 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
     final difference = totalNeeded - currentTotal;
 
     if (difference > 0.01) {
-      // ⭐ CASE 1: Tips INCREASED → Shortage
+      // CASE 1: Tips INCREASED → Shortage
       _showGiftCardShortageDialog(difference);
     } else if (difference < -0.01) {
-      // ⭐ CASE 2: Tips DECREASED → Excess, need to reduce scanned cards
+      // CASE 2: Tips DECREASED → Excess, need to reduce scanned cards
       final excess = -difference;
       _reduceGiftCardAmount(excess);
     }
     // If difference is ~0, do nothing
   }
 
-// ⭐ NEW: Reduce gift card amount by removing from the last cards
+// NEW: Reduce gift card amount by removing from the last cards
   void _reduceGiftCardAmount(double excessAmount) {
     double toReduce = excessAmount;
 
@@ -744,7 +780,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
       final currentUsed = (card['usedAmount'] as num).toDouble();
 
       if (currentUsed > toReduce) {
-        // ⭐ Reduce this card partially
+        // Reduce this card partially
         setState(() {
           _scannedGiftCards[i]['usedAmount'] = currentUsed - toReduce;
         });
@@ -760,7 +796,7 @@ class _FrontDeskWelcomeScreenState extends State<FrontDeskWelcomeScreen> with Ti
           ),
         );
       } else {
-        // ⭐ Remove this card completely
+        // Remove this card completely
         toReduce -= currentUsed;
         final removedCode = card['code'] as String;
 

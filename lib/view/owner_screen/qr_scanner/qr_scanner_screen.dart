@@ -1,7 +1,4 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // ⭐ THÊM IMPORT
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:hair_sallon/api/api_service.dart';
 import 'package:hair_sallon/api/giftcard_model.dart';
@@ -20,8 +17,8 @@ class QRScannerScreen extends StatefulWidget {
 
 class _QRScannerScreenState extends State<QRScannerScreen> {
   MobileScannerController cameraController = MobileScannerController(
-    detectionSpeed: DetectionSpeed.normal,
-    facing: CameraFacing.front,
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    facing: CameraFacing.back, // ⭐ CHANGED: back camera
     formats: [BarcodeFormat.qrCode],
     returnImage: false,
   );
@@ -31,22 +28,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   bool _isTorchOn = false;
 
   @override
-  void initState() {
-    super.initState();
-    // ⭐ FORCE PORTRAIT MODE KHI VÀO SCREEN
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
-  }
-
-  @override
   void dispose() {
-    // ⭐ RESTORE LẠI LANDSCAPE MODE KHI THOÁT SCREEN
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
     cameraController.dispose();
     super.dispose();
   }
@@ -73,10 +55,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   }
 
   bool _isValidGiftCardCode(String code) {
-    const expectedLength = 12;
-    if (code.length != expectedLength) return false;
-    final digitRegex = RegExp(r'^\d{12}$');
-    return digitRegex.hasMatch(code);
+    // Định dạng: 4 số + cách + 4 số + cách + 4 số
+    final pattern = RegExp(r'^\d{4}\s\d{4}\s\d{4}$');
+    return pattern.hasMatch(code);
   }
 
   void _showResultBottomSheet(String code) async {
@@ -140,9 +121,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
   Widget _buildLoadingSheet() {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.only(
+        borderRadius: BorderRadius.only(
           topLeft: Radius.circular(24),
           topRight: Radius.circular(24),
         ),
@@ -382,9 +363,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) {
         return Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: const BorderRadius.only(
+            borderRadius: BorderRadius.only(
               topLeft: Radius.circular(24),
               topRight: Radius.circular(24),
             ),
@@ -544,32 +525,17 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    final scanAreaSize = screenSize.width * 0.45;
+    final scanAreaSize = screenSize.width * 0.7; // ⭐ ADJUSTED for portrait
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // ⭐ CAMERA FULL SCREEN - BỎ Center, dùng Positioned.fill
+          // ⭐ CAMERA FULL SCREEN - NO ROTATION
           Positioned.fill(
-            child: Transform.rotate(
-              angle: -math.pi / 2,
-              child: OverflowBox(
-                alignment: Alignment.center,
-                maxWidth: double.infinity,
-                maxHeight: double.infinity,
-                child: FittedBox(
-                  fit: BoxFit.cover, // ⭐ Cover toàn màn hình
-                  child: SizedBox(
-                    width: screenSize.height,
-                    height: screenSize.width,
-                    child: MobileScanner(
-                      controller: cameraController,
-                      onDetect: _onDetect,
-                    ),
-                  ),
-                ),
-              ),
+            child: MobileScanner(
+              controller: cameraController,
+              onDetect: _onDetect,
             ),
           ),
 
@@ -723,7 +689,7 @@ class ModernScannerOverlay extends CustomPainter {
     final borderPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+      ..strokeWidth = 2;
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(scanRect, const Radius.circular(24)),
@@ -731,18 +697,18 @@ class ModernScannerOverlay extends CustomPainter {
     );
 
     final cornerPaint = Paint()
-      ..color = Colors.white
+      ..color = Colors.purple
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4 // ⭐ TĂNG ĐỘ DÀY
+      ..strokeWidth = 5
       ..strokeCap = StrokeCap.round;
 
-    const cornerLength = 30.0;
+    const cornerLength = 40.0;
 
     // Top-left corner
     canvas.drawLine(
         Offset(left, top + 24), Offset(left, top + cornerLength), cornerPaint);
-    canvas.drawLine(Offset(left + 24, top), Offset(left + cornerLength, top),
-        cornerPaint);
+    canvas.drawLine(
+        Offset(left + 24, top), Offset(left + cornerLength, top), cornerPaint);
 
     // Top-right corner
     canvas.drawLine(Offset(left + scanAreaSize, top + 24),

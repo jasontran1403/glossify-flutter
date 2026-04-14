@@ -68,10 +68,9 @@ class _TopupQRScannerScreenState extends State<TopupQRScannerScreen> {
   }
 
   bool _isValidGiftCardCode(String code) {
-    const expectedLength = 12;
-    if (code.length != expectedLength) return false;
-    final digitRegex = RegExp(r'^\d{12}$');
-    return digitRegex.hasMatch(code);
+    // Định dạng: 4 số + cách + 4 số + cách + 4 số
+    final pattern = RegExp(r'^\d{4}\s\d{4}\s\d{4}$');
+    return pattern.hasMatch(code);
   }
 
   Future<void> _handleScannedCode(String code) async {

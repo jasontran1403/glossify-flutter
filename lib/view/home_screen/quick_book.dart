@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../api/api_service.dart';
 import '../../utils/constant/quick_booking_model.dart';
 import '../../utils/navigation/navigation_file.dart';
+import '../../utils/auth_helper.dart'; // ✅ ADD THIS
 import '../calendar_screen/todo_calendar_screen.dart';
 
 class QuickBookScreen extends StatefulWidget {
@@ -160,7 +161,13 @@ class _QuickBookScreenState extends State<QuickBookScreen> with TickerProviderSt
     return [...selected, ...notSelected];
   }
 
-  void _onServiceTap(QuickServiceModel service) {
+  void _onServiceTap(QuickServiceModel service) async {
+    // ✅ Check if user is logged in before proceeding to booking
+    final canProceed = await AuthHelper.requireLogin(context);
+    if (!canProceed || !mounted) {
+      return;
+    }
+
     if (service.staffList.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('This service is not available at the moment.')),
@@ -209,7 +216,8 @@ class _QuickBookScreenState extends State<QuickBookScreen> with TickerProviderSt
     });
   }
 
-  void _bookNow() {
+  // ✅ UPDATED: Add serviceTimes parameter when navigating
+  void _bookNow() async {
     if (selectedServices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select at least one service.')),
@@ -231,6 +239,7 @@ class _QuickBookScreenState extends State<QuickBookScreen> with TickerProviderSt
         staffName: currentStaffName ?? 'Selected Staff',
         serviceIds: selectedServices.map((e) => e.id).toList(),
         serviceNames: selectedServices.map((e) => e.name).toList(),
+        serviceTimes: selectedServices.map((e) => e.time).toList(), // ✅ NEW: Pass service times
         storeId: widget.storeId,
       ),
     );

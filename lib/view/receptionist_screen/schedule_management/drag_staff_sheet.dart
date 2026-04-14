@@ -6,7 +6,7 @@ import 'drag_staff_avatar.dart';
 class DragStaffSheet extends StatefulWidget {
   final List<StaffSchedule> staffSchedules;
   final VoidCallback onClose;
-  final VoidCallback? onResetComplete; // ← Callback để reload schedule
+  final VoidCallback? onResetComplete;
 
   const DragStaffSheet({
     Key? key,

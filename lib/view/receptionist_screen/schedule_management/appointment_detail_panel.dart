@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:hair_sallon/api/api_service.dart';
 import 'package:hair_sallon/api/payment_websocket_service.dart';
 import '../../../api/store_info_model.dart';
-import '../../../utils/constant/staff_slot.dart';
 import '../task_model.dart';
 import 'booking_state.dart';
 import 'dart:async';
@@ -1496,408 +1495,408 @@ class _AppointmentDetailPanelState extends State<AppointmentDetailPanel>
 
                           // ===== BUTTONS THEO TRẠNG THÁI =====
                           // 3.1 WAITING_PAYMENT (Pending) → Discount + Send to Front Desk
-                          if (widget.task.status == 'WAITING_PAYMENT') ...[
-                            _buildDiscountCodeSection(),
-                            const SizedBox(height: 16),
-
-                            // ===== HIỂN THỊ PAYMENT METHOD ĐÃ NHẬN TỪ FRONTDESK =====
-                            if (_hasReceivedPaymentMethod && _receivedPaymentMethod != null) ...[
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.shade50,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.blue.shade200,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: Colors.blue,
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: const Icon(
-                                            Icons.check_circle,
-                                            color: Colors.white,
-                                            size: 20,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        const Expanded(
-                                          child: Text(
-                                            'Payment Method Received',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.blue,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-
-                                    _buildPaymentDetailRow(
-                                      'Method',
-                                      _getPaymentMethodDisplay(_receivedPaymentMethod.toString()),
-                                    ),
-
-                                    // ⭐ HIỂN THỊ GIFT CARD USAGES
-                                    if (_receivedPaymentMethod == 3 &&
-                                        _receivedGiftCardUsages != null &&
-                                        _receivedGiftCardUsages!.isNotEmpty) ...[
-                                      const SizedBox(height: 12),
-                                      const Divider(height: 1, color: Colors.blue),
-                                      const SizedBox(height: 12),
-
-                                      // Header
-                                      Row(
-                                        children: [
-                                          Icon(Icons.card_giftcard, color: Colors.purple, size: 18),
-                                          const SizedBox(width: 8),
-                                          const Text(
-                                            'Gift Cards Used:',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.purple,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-
-                                      // Gift Card List
-                                      ..._receivedGiftCardUsages!.map((card) {
-                                        final String code = card['code'] ?? '';
-                                        final double deductedAmount = (card['deductedAmount'] as num?)?.toDouble() ?? 0.0;
-                                        final double remainingBalance = (card['remainingBalance'] as num?)?.toDouble() ?? 0.0;
-
-                                        return Container(
-                                          margin: const EdgeInsets.only(bottom: 8),
-                                          padding: const EdgeInsets.all(10),
-                                          decoration: BoxDecoration(
-                                            color: Colors.purple.shade50,
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(color: Colors.purple.shade200),
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              // Code
-                                              Row(
-                                                children: [
-                                                  Container(
-                                                    padding: const EdgeInsets.all(4),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.purple,
-                                                      borderRadius: BorderRadius.circular(4),
-                                                    ),
-                                                    child: const Icon(
-                                                      Icons.card_giftcard,
-                                                      color: Colors.white,
-                                                      size: 14,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: Text(
-                                                      'Code: $code',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.w600,
-                                                        color: Colors.purple.shade900,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 8),
-
-                                              // Amounts
-                                              Row(
-                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                children: [
-                                                  Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Text(
-                                                        'Deducted:',
-                                                        style: TextStyle(
-                                                          fontSize: 11,
-                                                          color: Colors.grey[600],
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        _formatCurrency(deductedAmount),
-                                                        style: TextStyle(
-                                                          fontSize: 13,
-                                                          fontWeight: FontWeight.bold,
-                                                          color: Colors.red[700],
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                                    children: [
-                                                      Text(
-                                                        'Remaining:',
-                                                        style: TextStyle(
-                                                          fontSize: 11,
-                                                          color: Colors.grey[600],
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        _formatCurrency(remainingBalance),
-                                                        style: TextStyle(
-                                                          fontSize: 13,
-                                                          fontWeight: FontWeight.bold,
-                                                          color: Colors.green[700],
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }).toList(),
-
-                                      // Total Gift Card Amount
-                                      if (_receivedGiftCardAmount != null && _receivedGiftCardAmount! > 0) ...[
-                                        const SizedBox(height: 8),
-                                        Container(
-                                          padding: const EdgeInsets.all(10),
-                                          decoration: BoxDecoration(
-                                            color: Colors.purple,
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              const Text(
-                                                'Total Gift Card Amount:',
-                                                style: TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                              Text(
-                                                _formatCurrency(_receivedGiftCardAmount!),
-                                                style: const TextStyle(
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-
-                                    // Tip & Cash Discount
-                                    if (_receivedTip != null && _receivedTip! > 0)
-                                      _buildPaymentDetailRow(
-                                        'Tip',
-                                        _formatCurrency(_receivedTip!),
-                                      ),
-                                    if (_receivedCashDiscount != null && _receivedCashDiscount! > 0)
-                                      _buildPaymentDetailRow(
-                                        'Cash Discount',
-                                        '-${_formatCurrency(_receivedCashDiscount!)}',
-                                        valueColor: Colors.green,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-
-                              // NÚT COMPLETE PAYMENT
-                              Row(
-                                children: [
-                                  // CANCEL BUTTON
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: _cancelPaymentFromReceptionist,
-                                      icon: const Icon(
-                                        Icons.close,
-                                        color: Colors.red,
-                                        size: 20,
-                                      ),
-                                      label: const Text(
-                                        'Cancel',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.red,
-                                        ),
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        side: const BorderSide(
-                                          color: Colors.red,
-                                          width: 2,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-
-                                  const SizedBox(width: 12),
-
-                                  // COMPLETE PAYMENT BUTTON
-                                  Expanded(
-                                    child: ElevatedButton.icon(
-                                      onPressed: _processPayment,
-                                      icon: const Icon(
-                                        Icons.check_circle,
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                                      label: const Text(
-                                        'Complete',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.green,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ] else ...[
-                              // NẾU CHƯA NHẬN PAYMENT METHOD
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: ElevatedButton.icon(
-                                      onPressed:
-                                          _isSentToFrontDesk
-                                              ? null
-                                              : _sendToFrontDesk,
-                                      icon: const Icon(
-                                        Icons.send,
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                                      label: const Text(
-                                        'Send to Front Desk',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(
-                                          0xFF3B82F6,
-                                        ),
-                                        disabledBackgroundColor: Colors.grey,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              if (_isSentToFrontDesk)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 12),
-                                  child: SizedBox(
-                                    width: double.infinity,
-                                    child: OutlinedButton.icon(
-                                      onPressed: _cancelPaymentFromReceptionist,
-                                      icon: const Icon(
-                                        Icons.close,
-                                        color: Colors.red,
-                                      ),
-                                      label: const Text(
-                                        'Cancel Payment',
-                                        style: TextStyle(
-                                          color: Colors.red,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        side: const BorderSide(
-                                          color: Colors.red,
-                                          width: 2,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ]
-                          // 3.2 Active (BOOKED, CHECKED_IN, IN_PROGRESS) → Chỉ Cancel
-                          else ...[
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _showCancelDialog,
-                                icon: const Icon(
-                                  Icons.cancel_outlined,
-                                  color: Colors.red,
-                                  size: 20,
-                                ),
-                                label: const Text(
-                                  'Cancel Booking',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.red,
-                                  ),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(
-                                    color: Colors.red,
-                                    width: 2,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                          // if (widget.task.status == 'WAITING_PAYMENT') ...[
+                          //   // _buildDiscountCodeSection(),
+                          //   // const SizedBox(height: 16),
+                          //
+                          //   // ===== HIỂN THỊ PAYMENT METHOD ĐÃ NHẬN TỪ FRONTDESK =====
+                          //   if (_hasReceivedPaymentMethod && _receivedPaymentMethod != null) ...[
+                          //     Container(
+                          //       padding: const EdgeInsets.all(12),
+                          //       decoration: BoxDecoration(
+                          //         color: Colors.blue.shade50,
+                          //         borderRadius: BorderRadius.circular(12),
+                          //         border: Border.all(
+                          //           color: Colors.blue.shade200,
+                          //           width: 2,
+                          //         ),
+                          //       ),
+                          //       child: Column(
+                          //         crossAxisAlignment: CrossAxisAlignment.start,
+                          //         children: [
+                          //           Row(
+                          //             children: [
+                          //               Container(
+                          //                 padding: const EdgeInsets.all(8),
+                          //                 decoration: BoxDecoration(
+                          //                   color: Colors.blue,
+                          //                   borderRadius: BorderRadius.circular(8),
+                          //                 ),
+                          //                 child: const Icon(
+                          //                   Icons.check_circle,
+                          //                   color: Colors.white,
+                          //                   size: 20,
+                          //                 ),
+                          //               ),
+                          //               const SizedBox(width: 12),
+                          //               const Expanded(
+                          //                 child: Text(
+                          //                   'Payment Method Received',
+                          //                   style: TextStyle(
+                          //                     fontSize: 14,
+                          //                     fontWeight: FontWeight.bold,
+                          //                     color: Colors.blue,
+                          //                   ),
+                          //                 ),
+                          //               ),
+                          //             ],
+                          //           ),
+                          //           const SizedBox(height: 12),
+                          //
+                          //           _buildPaymentDetailRow(
+                          //             'Method',
+                          //             _getPaymentMethodDisplay(_receivedPaymentMethod.toString()),
+                          //           ),
+                          //
+                          //           // ⭐ HIỂN THỊ GIFT CARD USAGES
+                          //           if (_receivedPaymentMethod == 3 &&
+                          //               _receivedGiftCardUsages != null &&
+                          //               _receivedGiftCardUsages!.isNotEmpty) ...[
+                          //             const SizedBox(height: 12),
+                          //             const Divider(height: 1, color: Colors.blue),
+                          //             const SizedBox(height: 12),
+                          //
+                          //             // Header
+                          //             Row(
+                          //               children: [
+                          //                 Icon(Icons.card_giftcard, color: Colors.purple, size: 18),
+                          //                 const SizedBox(width: 8),
+                          //                 const Text(
+                          //                   'Gift Cards Used:',
+                          //                   style: TextStyle(
+                          //                     fontSize: 13,
+                          //                     fontWeight: FontWeight.bold,
+                          //                     color: Colors.purple,
+                          //                   ),
+                          //                 ),
+                          //               ],
+                          //             ),
+                          //             const SizedBox(height: 8),
+                          //
+                          //             // Gift Card List
+                          //             ..._receivedGiftCardUsages!.map((card) {
+                          //               final String code = card['code'] ?? '';
+                          //               final double deductedAmount = (card['deductedAmount'] as num?)?.toDouble() ?? 0.0;
+                          //               final double remainingBalance = (card['remainingBalance'] as num?)?.toDouble() ?? 0.0;
+                          //
+                          //               return Container(
+                          //                 margin: const EdgeInsets.only(bottom: 8),
+                          //                 padding: const EdgeInsets.all(10),
+                          //                 decoration: BoxDecoration(
+                          //                   color: Colors.purple.shade50,
+                          //                   borderRadius: BorderRadius.circular(8),
+                          //                   border: Border.all(color: Colors.purple.shade200),
+                          //                 ),
+                          //                 child: Column(
+                          //                   crossAxisAlignment: CrossAxisAlignment.start,
+                          //                   children: [
+                          //                     // Code
+                          //                     Row(
+                          //                       children: [
+                          //                         Container(
+                          //                           padding: const EdgeInsets.all(4),
+                          //                           decoration: BoxDecoration(
+                          //                             color: Colors.purple,
+                          //                             borderRadius: BorderRadius.circular(4),
+                          //                           ),
+                          //                           child: const Icon(
+                          //                             Icons.card_giftcard,
+                          //                             color: Colors.white,
+                          //                             size: 14,
+                          //                           ),
+                          //                         ),
+                          //                         const SizedBox(width: 8),
+                          //                         Expanded(
+                          //                           child: Text(
+                          //                             'Code: $code',
+                          //                             style: TextStyle(
+                          //                               fontSize: 12,
+                          //                               fontWeight: FontWeight.w600,
+                          //                               color: Colors.purple.shade900,
+                          //                             ),
+                          //                           ),
+                          //                         ),
+                          //                       ],
+                          //                     ),
+                          //                     const SizedBox(height: 8),
+                          //
+                          //                     // Amounts
+                          //                     Row(
+                          //                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          //                       children: [
+                          //                         Column(
+                          //                           crossAxisAlignment: CrossAxisAlignment.start,
+                          //                           children: [
+                          //                             Text(
+                          //                               'Deducted:',
+                          //                               style: TextStyle(
+                          //                                 fontSize: 11,
+                          //                                 color: Colors.grey[600],
+                          //                               ),
+                          //                             ),
+                          //                             Text(
+                          //                               _formatCurrency(deductedAmount),
+                          //                               style: TextStyle(
+                          //                                 fontSize: 13,
+                          //                                 fontWeight: FontWeight.bold,
+                          //                                 color: Colors.red[700],
+                          //                               ),
+                          //                             ),
+                          //                           ],
+                          //                         ),
+                          //                         Column(
+                          //                           crossAxisAlignment: CrossAxisAlignment.end,
+                          //                           children: [
+                          //                             Text(
+                          //                               'Remaining:',
+                          //                               style: TextStyle(
+                          //                                 fontSize: 11,
+                          //                                 color: Colors.grey[600],
+                          //                               ),
+                          //                             ),
+                          //                             Text(
+                          //                               _formatCurrency(remainingBalance),
+                          //                               style: TextStyle(
+                          //                                 fontSize: 13,
+                          //                                 fontWeight: FontWeight.bold,
+                          //                                 color: Colors.green[700],
+                          //                               ),
+                          //                             ),
+                          //                           ],
+                          //                         ),
+                          //                       ],
+                          //                     ),
+                          //                   ],
+                          //                 ),
+                          //               );
+                          //             }).toList(),
+                          //
+                          //             // Total Gift Card Amount
+                          //             if (_receivedGiftCardAmount != null && _receivedGiftCardAmount! > 0) ...[
+                          //               const SizedBox(height: 8),
+                          //               Container(
+                          //                 padding: const EdgeInsets.all(10),
+                          //                 decoration: BoxDecoration(
+                          //                   color: Colors.purple,
+                          //                   borderRadius: BorderRadius.circular(8),
+                          //                 ),
+                          //                 child: Row(
+                          //                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          //                   children: [
+                          //                     const Text(
+                          //                       'Total Gift Card Amount:',
+                          //                       style: TextStyle(
+                          //                         fontSize: 13,
+                          //                         fontWeight: FontWeight.bold,
+                          //                         color: Colors.white,
+                          //                       ),
+                          //                     ),
+                          //                     Text(
+                          //                       _formatCurrency(_receivedGiftCardAmount!),
+                          //                       style: const TextStyle(
+                          //                         fontSize: 15,
+                          //                         fontWeight: FontWeight.bold,
+                          //                         color: Colors.white,
+                          //                       ),
+                          //                     ),
+                          //                   ],
+                          //                 ),
+                          //               ),
+                          //             ],
+                          //           ],
+                          //
+                          //           // Tip & Cash Discount
+                          //           if (_receivedTip != null && _receivedTip! > 0)
+                          //             _buildPaymentDetailRow(
+                          //               'Tip',
+                          //               _formatCurrency(_receivedTip!),
+                          //             ),
+                          //           if (_receivedCashDiscount != null && _receivedCashDiscount! > 0)
+                          //             _buildPaymentDetailRow(
+                          //               'Cash Discount',
+                          //               '-${_formatCurrency(_receivedCashDiscount!)}',
+                          //               valueColor: Colors.green,
+                          //             ),
+                          //         ],
+                          //       ),
+                          //     ),
+                          //     const SizedBox(height: 16),
+                          //
+                          //     // NÚT COMPLETE PAYMENT
+                          //     Row(
+                          //       children: [
+                          //         // CANCEL BUTTON
+                          //         Expanded(
+                          //           child: OutlinedButton.icon(
+                          //             onPressed: _cancelPaymentFromReceptionist,
+                          //             icon: const Icon(
+                          //               Icons.close,
+                          //               color: Colors.red,
+                          //               size: 20,
+                          //             ),
+                          //             label: const Text(
+                          //               'Cancel',
+                          //               style: TextStyle(
+                          //                 fontSize: 14,
+                          //                 fontWeight: FontWeight.bold,
+                          //                 color: Colors.red,
+                          //               ),
+                          //             ),
+                          //             style: OutlinedButton.styleFrom(
+                          //               side: const BorderSide(
+                          //                 color: Colors.red,
+                          //                 width: 2,
+                          //               ),
+                          //               padding: const EdgeInsets.symmetric(
+                          //                 vertical: 16,
+                          //               ),
+                          //               shape: RoundedRectangleBorder(
+                          //                 borderRadius: BorderRadius.circular(8),
+                          //               ),
+                          //             ),
+                          //           ),
+                          //         ),
+                          //
+                          //         const SizedBox(width: 12),
+                          //
+                          //         // COMPLETE PAYMENT BUTTON
+                          //         Expanded(
+                          //           child: ElevatedButton.icon(
+                          //             onPressed: _processPayment,
+                          //             icon: const Icon(
+                          //               Icons.check_circle,
+                          //               color: Colors.white,
+                          //               size: 20,
+                          //             ),
+                          //             label: const Text(
+                          //               'Complete',
+                          //               style: TextStyle(
+                          //                 fontSize: 14,
+                          //                 fontWeight: FontWeight.bold,
+                          //                 color: Colors.white,
+                          //               ),
+                          //             ),
+                          //             style: ElevatedButton.styleFrom(
+                          //               backgroundColor: Colors.green,
+                          //               padding: const EdgeInsets.symmetric(
+                          //                 vertical: 16,
+                          //               ),
+                          //               shape: RoundedRectangleBorder(
+                          //                 borderRadius: BorderRadius.circular(8),
+                          //               ),
+                          //             ),
+                          //           ),
+                          //         ),
+                          //       ],
+                          //     ),
+                          //   ] else ...[
+                          //     // NẾU CHƯA NHẬN PAYMENT METHOD
+                          //     Row(
+                          //       children: [
+                          //         Expanded(
+                          //           child: ElevatedButton.icon(
+                          //             onPressed:
+                          //                 _isSentToFrontDesk
+                          //                     ? null
+                          //                     : _sendToFrontDesk,
+                          //             icon: const Icon(
+                          //               Icons.send,
+                          //               color: Colors.white,
+                          //               size: 20,
+                          //             ),
+                          //             label: const Text(
+                          //               'Send to Front Desk',
+                          //               style: TextStyle(
+                          //                 fontSize: 14,
+                          //                 fontWeight: FontWeight.bold,
+                          //                 color: Colors.white,
+                          //               ),
+                          //             ),
+                          //             style: ElevatedButton.styleFrom(
+                          //               backgroundColor: const Color(
+                          //                 0xFF3B82F6,
+                          //               ),
+                          //               disabledBackgroundColor: Colors.grey,
+                          //               padding: const EdgeInsets.symmetric(
+                          //                 vertical: 16,
+                          //               ),
+                          //               shape: RoundedRectangleBorder(
+                          //                 borderRadius: BorderRadius.circular(
+                          //                   8,
+                          //                 ),
+                          //               ),
+                          //             ),
+                          //           ),
+                          //         ),
+                          //       ],
+                          //     ),
+                          //
+                          //     if (_isSentToFrontDesk)
+                          //       Padding(
+                          //         padding: const EdgeInsets.only(top: 12),
+                          //         child: SizedBox(
+                          //           width: double.infinity,
+                          //           child: OutlinedButton.icon(
+                          //             onPressed: _cancelPaymentFromReceptionist,
+                          //             icon: const Icon(
+                          //               Icons.close,
+                          //               color: Colors.red,
+                          //             ),
+                          //             label: const Text(
+                          //               'Cancel Payment',
+                          //               style: TextStyle(
+                          //                 color: Colors.red,
+                          //                 fontWeight: FontWeight.bold,
+                          //               ),
+                          //             ),
+                          //             style: OutlinedButton.styleFrom(
+                          //               side: const BorderSide(
+                          //                 color: Colors.red,
+                          //                 width: 2,
+                          //               ),
+                          //               padding: const EdgeInsets.symmetric(
+                          //                 vertical: 16,
+                          //               ),
+                          //             ),
+                          //           ),
+                          //         ),
+                          //       ),
+                          //   ],
+                          // ]
+                          // // 3.2 Active (BOOKED, CHECKED_IN, IN_PROGRESS) → Chỉ Cancel
+                          // else ...[
+                          //   SizedBox(
+                          //     width: double.infinity,
+                          //     child: OutlinedButton.icon(
+                          //       onPressed: _showCancelDialog,
+                          //       icon: const Icon(
+                          //         Icons.cancel_outlined,
+                          //         color: Colors.red,
+                          //         size: 20,
+                          //       ),
+                          //       label: const Text(
+                          //         'Cancel Booking',
+                          //         style: TextStyle(
+                          //           fontSize: 16,
+                          //           fontWeight: FontWeight.bold,
+                          //           color: Colors.red,
+                          //         ),
+                          //       ),
+                          //       style: OutlinedButton.styleFrom(
+                          //         side: const BorderSide(
+                          //           color: Colors.red,
+                          //           width: 2,
+                          //         ),
+                          //         padding: const EdgeInsets.symmetric(
+                          //           vertical: 16,
+                          //         ),
+                          //         shape: RoundedRectangleBorder(
+                          //           borderRadius: BorderRadius.circular(8),
+                          //         ),
+                          //       ),
+                          //     ),
+                          //   ),
+                          // ],
                         ],
                       ],
                     ),

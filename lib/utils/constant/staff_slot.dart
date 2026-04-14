@@ -1,6 +1,7 @@
 // ⭐ Cập nhật trong staff_slot.dart
 class StaffSlot {
   final int bookingId;
+  final bool markUnchange;
   final String fullName;
   final String customerAvt;
   final String startTime;
@@ -23,6 +24,7 @@ class StaffSlot {
 
   StaffSlot({
     required this.bookingId,
+    required this.markUnchange,
     required this.fullName,
     required this.customerAvt,
     required this.startTime,
@@ -45,6 +47,7 @@ class StaffSlot {
   factory StaffSlot.fromJson(Map<String, dynamic> json) {
     return StaffSlot(
       bookingId: json['bookingId'],
+      markUnchange: json['markUnchange'],
       fullName: json['fullName'],
       customerAvt: json['customerAvt'],
       startTime: json['startTime'],

@@ -10,12 +10,14 @@ import 'package:hair_sallon/api/promotion_request_models.dart';
 import 'package:hair_sallon/utils/app_colors/app_colors.dart';
 import 'package:hair_sallon/utils/local_images/local_images.dart';
 import 'package:hair_sallon/utils/navigation/navigation_file.dart';
+import 'package:hair_sallon/utils/auth_helper.dart'; // ✅ ADD
 import 'package:hair_sallon/view/card_method/card_method.dart';
 import 'package:hair_sallon/view/profile_screen/widget/savehistory.dart';
 import 'package:hair_sallon/view/profile_screen/widget/settings.dart';
 import 'package:hair_sallon/view/profile_screen/widget/help_center.dart';
 import 'package:hair_sallon/view/profile_screen/widget/privacy_policy.dart';
 import 'package:hair_sallon/view/splash/app_splash_loader.dart';
+import 'package:hair_sallon/view/sign_in/sign_in.dart'; // ✅ ADD
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:file_picker/file_picker.dart';
@@ -32,9 +34,10 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
+  bool _isLoggedIn = false; // ✅ Track login status
   String _fullName = "User";
   String? _avatarPath;
-  String _role = "USER"; // DEFAULT
+  String _role = "USER";
 
   // Promotion Request State
   bool _hasPendingRequest = false;
@@ -66,7 +69,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    _checkLoginAndLoadData();
+  }
+
+  // ✅ NEW: Check login first, then load data
+  Future<void> _checkLoginAndLoadData() async {
+    // Add delay to prevent flickering
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    final isLoggedIn = await AuthHelper.isLoggedIn();
+
+    setState(() {
+      _isLoggedIn = isLoggedIn;
+    });
+
+    if (isLoggedIn) {
+      await _loadUserData();
+    } else {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -90,11 +113,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     }
 
-    Future.delayed(const Duration(seconds: 1), () {
+    Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted) {
         setState(() => _isLoading = false);
       }
     });
+  }
+
+  // ============================================================================
+  // ✅ NEW: Login Required UI
+  // ============================================================================
+  Widget _buildLoginRequiredUI() {
+    return SignInScreen();
   }
 
   // ============================================================================
@@ -497,7 +527,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.only(top: 20, left: 12, right: 12),
-          child: _isLoading ? buildShimmerUI() : buildProfileUI(context),
+          child: _isLoading
+              ? buildShimmerUI()
+              : !_isLoggedIn
+              ? _buildLoginRequiredUI() // ✅ Show login UI if not logged in
+              : buildProfileUI(context),
         ),
       ),
     );
@@ -609,7 +643,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ============================================================================
-  // ✅ NEW: Become Staff Menu Item with Status
+  // ✅ Become Staff Menu Item with Status
   // ============================================================================
   Widget _buildBecomeStaffMenuItem() {
     // ✅ Only show status for PENDING and REJECTED

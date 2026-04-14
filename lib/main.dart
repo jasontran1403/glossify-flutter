@@ -7,11 +7,12 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:hair_sallon/utils/app_colors/app_colors.dart';
 import 'package:hair_sallon/view/bottombar_screen/bottomscreen_view_user.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:hair_sallon/view/get_started/get_started.dart';
 import 'package:hair_sallon/view/splash/app_splash_loader.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:top_snackbar_flutter/top_snack_bar.dart';
+import 'package:hair_sallon/utils/snowfall_widget.dart'; // ✅ SNOWFALL IMPORT
+import 'package:timezone/data/latest.dart' as tz;
 
 // 🔑 Global Navigator Key
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -176,6 +177,7 @@ void main() async {
     ),
   );
 
+  tz.initializeTimeZones();
   runApp(const MyApp());
 }
 
@@ -207,9 +209,16 @@ class _MyAppState extends State<MyApp> {
   String? fcmToken;
   Widget? _home;
 
+  // ✅ GLOBAL SNOWFALL CONTROL
+  bool _showSnowfall = false;
+
+  // ✅ Static instance for global access
+  static _MyAppState? _instance;
+
   @override
   void initState() {
     super.initState();
+    _instance = this; // ✅ Set singleton instance
     initFirebaseMessaging();
     _loadHome();
   }
@@ -234,6 +243,17 @@ class _MyAppState extends State<MyApp> {
     } catch (e) {
       print('Audio file not found: $e');
     }
+  }
+
+  // ✅ GLOBAL SNOWFALL TOGGLE - Call from anywhere
+  static void toggleSnowfall() {
+    _instance?._toggleSnowfallInternal();
+  }
+
+  void _toggleSnowfallInternal() {
+    setState(() {
+      _showSnowfall = !_showSnowfall;
+    });
   }
 
   /// Khởi tạo Firebase Messaging
@@ -279,19 +299,17 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _loadHome() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('accessToken');
+    // ✅ Always load BottomNavBarView - no login required for browsing
     if (mounted) {
       setState(() {
-        _home = token != null && token.isNotEmpty
-            ? const BottomNavBarView()
-            : const GetStarted();
+        _home = const BottomNavBarView();
       });
     }
   }
 
   @override
   void dispose() {
+    _instance = null; // ✅ Clear singleton
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -301,11 +319,26 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       navigatorKey: navigatorKey,
       builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: const TextScaler.linear(1.0),
-          ),
-          child: child!,
+        return Stack(
+          children: [
+            // ✅ Original MediaQuery wrapper with app content
+            MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: const TextScaler.linear(1.0),
+              ),
+              child: child!,
+            ),
+
+            // ❄️ GLOBAL SNOWFALL OVERLAY - Shows on ALL screens
+            if (_showSnowfall)
+              Positioned.fill(
+                child: AdvancedSnowfallWidget(
+                  numberOfSnowflakes: 30,
+                  isEnabled: true,
+                  // colorScheme already defaults to christmasCustom (your colors)
+                ),
+              ),
+          ],
         );
       },
       theme: ThemeData(

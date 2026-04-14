@@ -184,7 +184,8 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
           startTime: slot.startTime,
           endTime: DateFormat('HH:mm').format(end),
           status: slot.status,
-          displayTime: "${DateFormat('HH:mm').format(start)} - ${DateFormat('HH:mm').format(end)}",
+          displayTime:
+          "${DateFormat('HH:mm').format(start)} - ${DateFormat('HH:mm').format(end)}",
           originalSlot: slot, // ⭐ Giữ reference đến slot gốc
         ),
       );
@@ -290,7 +291,8 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                             decoration: InputDecoration(
                               labelText: 'Phone Number *',
                               hintText: '+1 (XXX) XXX-XXXX',
-                              errorText: phoneError.isNotEmpty ? phoneError : null,
+                              errorText:
+                              phoneError.isNotEmpty ? phoneError : null,
                               prefixIcon: const Icon(Icons.phone),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -302,11 +304,17 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                               LengthLimitingTextInputFormatter(11),
                             ],
                             onChanged: (value) {
-                              final digits = value.replaceAll(RegExp(r'[^\d]'), '');
+                              final digits = value.replaceAll(
+                                RegExp(r'[^\d]'),
+                                '',
+                              );
                               if (digits.length > 11) {
                                 final trimmedDigits = digits.substring(0, 11);
-                                phoneController.text = _formatPhoneNumber(trimmedDigits);
-                                phoneController.selection = TextSelection.collapsed(
+                                phoneController.text = _formatPhoneNumber(
+                                  trimmedDigits,
+                                );
+                                phoneController
+                                    .selection = TextSelection.collapsed(
                                   offset: phoneController.text.length,
                                 );
                                 validatePhoneNumber(trimmedDigits);
@@ -317,7 +325,8 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                               final formatted = _formatPhoneNumber(digits);
                               if (formatted != phoneController.text) {
                                 phoneController.text = formatted;
-                                phoneController.selection = TextSelection.collapsed(
+                                phoneController
+                                    .selection = TextSelection.collapsed(
                                   offset: formatted.length,
                                 );
                               }
@@ -331,7 +340,8 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                         IconButton(
                           icon: const Icon(Icons.add),
                           onPressed: () async {
-                            final cleanedPhone = phoneController.text.replaceAll(RegExp(r'[^\d]'), '');
+                            final cleanedPhone = phoneController.text
+                                .replaceAll(RegExp(r'[^\d]'), '');
                             if (cleanedPhone.length == 11) {
                               await savePhoneNumber(cleanedPhone);
                               setDialogState(() {
@@ -382,7 +392,10 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: isCreatingBooking ? null : () => Navigator.pop(dialogContext),
+                  onPressed:
+                  isCreatingBooking
+                      ? null
+                      : () => Navigator.pop(dialogContext),
                   child: const Text(
                     "Cancel",
                     style: TextStyle(fontSize: 16, color: Colors.grey),
@@ -394,14 +407,20 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                       vertical: 12,
                       horizontal: 24,
                     ),
-                    backgroundColor: (localAgreedMarketing && isPhoneValid && !isCreatingBooking)
+                    backgroundColor:
+                    (localAgreedMarketing &&
+                        isPhoneValid &&
+                        !isCreatingBooking)
                         ? AppColors.primaryColor
                         : AppColors.porcelainColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: (localAgreedMarketing && isPhoneValid && !isCreatingBooking)
+                  onPressed:
+                  (localAgreedMarketing &&
+                      isPhoneValid &&
+                      !isCreatingBooking)
                       ? () async {
                     setState(() {
                       isCreatingBooking = true;
@@ -411,13 +430,18 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                     agreedMarketing = localAgreedMarketing;
 
                     int? userId = await ApiService.getUserId();
-                    String customerPhone = phoneController.text.replaceAll(RegExp(r'[^\d]'), '');
+                    String customerPhone = phoneController.text
+                        .replaceAll(RegExp(r'[^\d]'), '');
 
-                    final DateTime bookingDateTime = DateFormat("yyyy-MM-dd HH:mm").parse(
+                    final DateTime bookingDateTime = DateFormat(
+                      "yyyy-MM-dd HH:mm",
+                    ).parse(
                       "${DateFormat('yyyy-MM-dd').format(selectedDate)} $selectedSlotStartTime",
                     );
 
-                    String startTimeStr = DateFormat('yyyy-MM-dd HH:mm').format(bookingDateTime);
+                    String startTimeStr = DateFormat(
+                      'yyyy-MM-dd HH:mm',
+                    ).format(bookingDateTime);
 
                     final res = await ApiService.createBooking(
                       staffId: widget.staffId,
@@ -425,6 +449,7 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                       customerPhone: customerPhone,
                       startTime: startTimeStr,
                       storeId: widget.storeId,
+                      markUnchange: false,
                       serviceIds: widget.serviceIds,
                     );
 
@@ -445,11 +470,15 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                         SnackBar(
                           content: Row(
                             children: [
-                              const Icon(Icons.check_circle, color: Colors.white),
+                              const Icon(
+                                Icons.check_circle,
+                                color: Colors.white,
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  res['message'] ?? "Booking successful",
+                                  res['message'] ??
+                                      "Booking successful",
                                   style: const TextStyle(fontSize: 16),
                                 ),
                               ),
@@ -462,7 +491,9 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
 
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(
-                          builder: (context) => BottomNavBarView(initialTabIndex: 2),
+                          builder:
+                              (context) =>
+                              BottomNavBarView(initialTabIndex: 2),
                         ),
                             (route) => false,
                       );
@@ -476,7 +507,10 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                         SnackBar(
                           content: Row(
                             children: [
-                              const Icon(Icons.error, color: Colors.white),
+                              const Icon(
+                                Icons.error,
+                                color: Colors.white,
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
@@ -493,13 +527,16 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                     }
                   }
                       : null,
-                  child: isCreatingBooking
+                  child:
+                  isCreatingBooking
                       ? const SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.whiteColor),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.whiteColor,
+                      ),
                     ),
                   )
                       : const Text(
@@ -554,7 +591,8 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text("Schedule - ${widget.staffName}")),
-      body: isLoading
+      body:
+      isLoading
           ? const Center(child: CircularProgressIndicator())
           : errorMessage != null
           ? Center(
@@ -593,7 +631,8 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                 todayHighlightColor: Colors.transparent,
                 selectionColor: AppColors.primaryColor,
                 showNavigationArrow: true,
-                monthViewSettings: const DateRangePickerMonthViewSettings(
+                monthViewSettings:
+                const DateRangePickerMonthViewSettings(
                   firstDayOfWeek: 1,
                   viewHeaderHeight: 40,
                   dayFormat: 'EEE',
@@ -617,7 +656,8 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12.0),
               child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                gridDelegate:
+                const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 4,
                   mainAxisSpacing: 4,
                   crossAxisSpacing: 4,
@@ -627,10 +667,12 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                 itemBuilder: (context, index) {
                   final displaySlot = formattedSlots[index];
                   bool isDisabled = displaySlot.status != 'AVAILABLE';
-                  bool isSelected = selectedSlotStartTime == displaySlot.startTime;
+                  bool isSelected =
+                      selectedSlotStartTime == displaySlot.startTime;
 
                   return GestureDetector(
-                    onTap: isDisabled
+                    onTap:
+                    isDisabled
                         ? null
                         : () {
                       setState(() {
@@ -640,8 +682,11 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                           countdownTimer?.cancel();
                           remainingSeconds = 0;
                         } else {
-                          selectedSlotStartTime = displaySlot.startTime;
-                          selectedSlot = displaySlot.originalSlot; // ⭐ Sử dụng slot gốc
+                          selectedSlotStartTime =
+                              displaySlot.startTime;
+                          selectedSlot =
+                              displaySlot
+                                  .originalSlot; // ⭐ Sử dụng slot gốc
                           startCountdown();
                         }
                       });
@@ -649,14 +694,20 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                     child: Container(
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: isDisabled
+                        color:
+                        isDisabled
                             ? Colors.grey.shade400
-                            : (isSelected ? Colors.tealAccent : Colors.white),
+                            : (isSelected
+                            ? Colors.tealAccent
+                            : Colors.white),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: isDisabled
+                          color:
+                          isDisabled
                               ? Colors.grey
-                              : (isSelected ? Colors.teal : Colors.grey.shade300),
+                              : (isSelected
+                              ? Colors.teal
+                              : Colors.grey.shade300),
                           width: 1.2,
                         ),
                       ),
@@ -664,7 +715,10 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
                         displaySlot.displayTime,
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDisabled ? Colors.grey.shade700 : Colors.black,
+                          color:
+                          isDisabled
+                              ? Colors.grey.shade700
+                              : Colors.black,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -695,7 +749,8 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
         padding: const EdgeInsets.all(24),
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: selectedSlot != null && !isCreatingBooking
+            backgroundColor:
+            selectedSlot != null && !isCreatingBooking
                 ? AppColors.primaryColor
                 : Colors.grey,
             shape: RoundedRectangleBorder(
@@ -703,8 +758,12 @@ class _BookingScheduleScreenState extends State<BookingScheduleScreen> {
             ),
             padding: const EdgeInsets.symmetric(vertical: 14),
           ),
-          onPressed: (selectedSlot != null && !isCreatingBooking) ? showConfirmationDialog : null,
-          child: isCreatingBooking
+          onPressed:
+          (selectedSlot != null && !isCreatingBooking)
+              ? showConfirmationDialog
+              : null,
+          child:
+          isCreatingBooking
               ? const SizedBox(
             width: 20,
             height: 20,

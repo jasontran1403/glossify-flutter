@@ -12,7 +12,7 @@ class AppStrings {
   static const String bothNotifcation = '  Please enter Both Fields';
   static const String password = 'Password';
   static const String forgotpassword = 'Forgot Password?';
-  static const String emailDemo = 'Username or phone number';
+  static const String emailDemo = 'Phone number';
   static const String welcomeBack = 'Welcome to Glossify!';
   static const String bookingSuccess = 'Your appointment is confirmed.';
   static const String noInternet = 'No internet connection. Please try again.';
